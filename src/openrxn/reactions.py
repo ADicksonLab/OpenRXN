@@ -58,6 +58,9 @@ class Reaction(object):
         if kf == 0 and kr == 0:
             logging.warn("Warning: Both forward and reverse rates are set to zero")
 
+        self.kf = kf
+        self.kr = kr
+
         # todo: assure that the units on the rates are correct
 
     def display(self):
@@ -67,23 +70,29 @@ class Reaction(object):
         
         for i,r in enumerate(self.reactants):
             if i > 0:
-                to_print += " + "
-            to_print += "{1}{0}".format(r.ID,self.stoich_r[i])
+                to_print += "+ "
+            if self.stoich_r[i] > 1:
+                to_print += "{1} {0} ".format(r.ID,self.stoich_r[i])
+            else:
+                to_print += "{0} ".format(r.ID)
 
         if self.kr > 0:
             to_print += "<"
-            rate_str += "kr = {0}".format(self.kr)
+            rate_str += " // kr = {0}".format(self.kr)
 
         to_print += "---"
 
         if self.kf > 0:
-            to_print += ">"
-            rate_str += " / kf = {0}".format(self.kf)
+            to_print += "> "
+            rate_str += " // kf = {0}".format(self.kf)
 
         for i,p in enumerate(self.products):
             if i > 0:
-                to_print += " + "
-            to_print += "{1}{0}".format(p.ID,self.stoich_p[i])
+                to_print += "+ "
+            if self.stoich_p[i] > 1:
+                to_print += "{1} {0} ".format(p.ID,self.stoich_p[i])
+            else:
+                to_print += "{0} ".format(p.ID)
 
         return(to_print + rate_str)
 
