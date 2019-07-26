@@ -10,6 +10,7 @@ import pint
 unit = pint.UnitRegistry()
 
 import numpy as np
+import networkx as nx
 
 # define species and reactions
 
@@ -26,8 +27,8 @@ binding = Reaction('binding',[drug,receptor],[dr_complex],[1,1],[1],kf=kon,kr=ko
 
 in_slab = FicksConnection({'drug' : 1e-8*unit.cm**2/unit.sec})
 
-x_pos = np.linspace(-50,50,101)*unit.nanometer
-y_pos = np.linspace(-50,50,101)*unit.nanometer
+x_pos = np.linspace(-50,50,11)*unit.nanometer
+y_pos = np.linspace(-50,50,11)*unit.nanometer
 z_pos1 = np.array([-1,0])*unit.nanometer
 lower_slab = CompartmentArray3D('lower_slab',x_pos,y_pos,z_pos1,in_slab,periodic=[True,True,False])
 
@@ -49,4 +50,6 @@ bulk.join3D(upper_slab,slab_to_bulk,append_side='z-')
 my_model = Model([lower_slab,upper_slab,bulk])
 my_flat_model = my_model.flatten()
 
-
+# export a graph
+graph = my_flat_model.to_graph()
+nx.readwrite.gexf.write_gexf(graph,'membrane.gexf')

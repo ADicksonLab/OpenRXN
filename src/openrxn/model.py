@@ -8,8 +8,9 @@ from openrxn.compartments.compartment import Compartment
 from openrxn.reactions import Reaction
 from openrxn.compartments.ID import makeID
 from openrxn.connections import FicksConnection
+
 import numpy as np
-from math import sqrt
+import networkx as nx
 
 class Model(object):
     """Models can hold both compartments and compartment 
@@ -199,4 +200,40 @@ class FlatModel(object):
             assert c in self.compartments, "Error! compartment {0} is not in Model".format(c)
             self.compartments[c].add_rxn_to_compartment(rxn)
     
+    def to_graph(self,scale=10):
+        """Exports a networkX.DiGraph where the nodes are 
+        compartments and the edges are connections."""
 
+        graph = nx.DiGraph()
+
+        # add all the nodes
+        for c_name, c in self.compartments.items():
+            graph.add_node(c_name)
+            graph.node[c_name]['viz'] = {}
+
+            x = scale*0.5*(c.pos[0][0] + c.pos[0][1]).magnitude
+            y = scale*0.5*(c.pos[1][0] + c.pos[1][1]).magnitude
+            z = scale*0.5*(c.pos[2][0] + c.pos[2][1]).magnitude
+            vis_x,vis_y = self._project_xy((x,y,z))
+            
+            graph.node[c_name]['viz']['position'] = {'x': float(vis_x), 'y': float(vis_y)}
+
+        # build an edges list
+        edges = []
+        for c_name, c in self.compartments.items():
+            for e_name, conn in c.connections.items():
+                new_rates_dict = {}
+                for spec, tup in conn[1].species_rates.items():
+                    new_rates_dict[spec] = tup[0].magnitude
+                edges.append((c_name,e_name,new_rates_dict))
+        graph.add_edges_from(edges)
+
+        return graph
+
+    def _project_xy(self,pos,alpha=0.7,beta=1.2):
+        # Converts x,y,z positions to x,y positions using an orthographic projection
+
+        x_vis = pos[0] - alpha*pos[1]
+        y_vis = pos[2] + beta*pos[1]
+
+        return(x_vis,y_vis)
