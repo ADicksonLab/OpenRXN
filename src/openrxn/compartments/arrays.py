@@ -13,7 +13,7 @@ class CompartmentArray(object):
 
     def add_rxn_to_array(self, rxn):
         """Adds a reaction to each compartment in the array."""
-        for c in self.compartments:
+        for c in self.compartments.values():
             c.add_rxn_to_compartment(rxn)
 
     def change_all_intra_connection_type(self, new_ctype):

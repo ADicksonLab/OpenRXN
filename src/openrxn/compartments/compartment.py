@@ -2,6 +2,8 @@
 of material between compartments through connections."""
 
 from openrxn.compartments.ID import makeID
+import pint
+unit = pint.UnitRegistry()
 
 class Compartment(object):
     """Compartments are initialized with an ID, which can be a string, an int
@@ -24,13 +26,17 @@ class Compartment(object):
     'xy', 'yz', 'xz'.  Used by CompartmentArray3D for FicksConnections.
     """
     
-    def __init__(self, ID, pos=None, array_ID=None, surface_area=None):
+    def __init__(self, ID, pos=[], array_ID=None, surface_area=None):
         self.ID = ID
         self.reactions = []
         self.connections = {}
         self.pos = pos
         self.array_ID = array_ID
         self.surface_area = surface_area
+        self.volume = None
+        if len(pos)==3:
+            self.volume = (pos[0][1]-pos[0][0])*(pos[1][1]-pos[1][0])*(pos[2][1]-pos[2][0])
+            self.volume.to(unit.L)
         
     def add_rxn_to_compartment(self, rxn):
         """Adds a reaction to a compartment."""

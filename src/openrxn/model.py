@@ -64,7 +64,7 @@ class Model(object):
     def add_compartment(self,compartment):
         if compartment.ID in self.compartments.keys():
             raise ValueError("Error! Duplicate compartment ID in model ({0})".format(compartment.ID))
-        self.comparments[compartment.ID] = compartment
+        self.compartments[compartment.ID] = compartment
 
     def flatten(self):
         """Returns a FlatModel, where all compartment array

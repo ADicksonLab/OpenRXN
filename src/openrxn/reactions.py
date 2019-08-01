@@ -6,9 +6,7 @@ The combustion reaction  CH4  +  2O2 -->  CO2  + 2H2O
 is represented as follows:
 
 from openrxn.reactions import Reaction, Species
-import pint
-
-unit = pint.UnitRegistry()
+from openrxn import unit
 
 m = Species('methane')
 o2 = Species('molecular oxygen')
@@ -60,6 +58,9 @@ class Reaction(object):
 
         self.kf = kf
         self.kr = kr
+
+        self.reactant_IDs = [s.ID for s in self.reactants]
+        self.product_IDs = [s.ID for s in self.products]
 
         # todo: assure that the units on the rates are correct
 

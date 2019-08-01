@@ -9,13 +9,19 @@ where nX is the number of a given species in compartment X,
 VX is the volume of compartment X and kAB is a rate
 constant governing transport between compartment A and B.
 
+A note on units:
+The k values in the above equation are in units of volume/sec,
+and this is what is stored in the connection objects.
+When building a the differential equations in the system object
+(system.dqdt) these are divided by the compartment volume, and 
+have units of 1/s.
+
 The convention here is to keep all rate constants in units of
 unit.liter/unit.sec.
 
 """
 
-import pint
-ureg = pint.UnitRegistry()
+from . import unit
 
 class Connection(object):
     """Basis class for connections.  The argument species_rates
@@ -31,12 +37,18 @@ class AnisotropicConnection(Connection):
 
         Care should be taken to make sure these are applied in the
         right direction!
+
+        Rates should be specified in units of L/s, as they are 
+        divided by compartment volumes before system integration.
         """
         self.species_rates = species_rates
 
         for s in self.species_rates:
             if type(self.species_rates[s]) is not tuple or len(self.species_rates[s]) != 2:
                 raise ValueError("Error! Elements of species_rates dictionary should be tuples of length 2")
+            self.species_rates[s][0].ito(unit.liter/unit.sec)
+            self.species_rates[s][1].ito(unit.liter/unit.sec)
+
 
     def _flip_tuple(t):
         return (t[1],t[0])
@@ -54,6 +66,9 @@ class IsotropicConnection(Connection):
         """IsotropicConnections are initialized with a dictionary
         of species_rates, where the keys are Species IDs and the 
         values are transport rates.
+
+        Rates should be specified in units of L/s, as they are 
+        divided by compartment volumes before system integration.
         """
         self.species_rates = species_rates
 
@@ -61,6 +76,8 @@ class IsotropicConnection(Connection):
             k = self.species_rates[s]
             if type(k) is not tuple:
                 self.species_rates[s] = (k,k)
+            self.species_rates[s][0].ito(unit.liter/unit.sec)
+            self.species_rates[s][1].ito(unit.liter/unit.sec)
 
 class FicksConnection(IsotropicConnection):
 
@@ -110,6 +127,6 @@ class FicksConnection(IsotropicConnection):
         rates = {}
         for s,d in self.species_d_constants.items():
             rates[s] = d*self.surface_area/self.ic_distance
-            rates[s].ito(ureg.liter/ureg.sec)
+            rates[s].ito(unit.liter/unit.sec)
             
         return IsotropicConnection(rates)
