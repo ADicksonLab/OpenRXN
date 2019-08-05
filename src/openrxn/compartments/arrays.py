@@ -2,7 +2,7 @@
 it easier to connect and manipulate large groups."""
 
 from openrxn.connections import Connection
-from openrxn.compartments.compartment import Compartment
+from openrxn.compartments.compartment import Compartment1D, Compartment2D, Compartment3D
 
 class CompartmentArray(object):
     """Base class for compartment arrays."""
@@ -15,6 +15,11 @@ class CompartmentArray(object):
         """Adds a reaction to each compartment in the array."""
         for c in self.compartments.values():
             c.add_rxn_to_compartment(rxn)
+
+    def add_rxns_to_array(self, rxns):
+        """Adds each reaction in rxns to each compartment in the array."""
+        for r in rxns:
+            self.add_rxn_to_array(r)
 
     def change_all_intra_connection_type(self, new_ctype):
         """Change the connection type between the compartments,
@@ -73,7 +78,7 @@ class CompartmentArray1D(CompartmentArray):
         # initialize compartment dictionary
         self.compartments = {}
         for i in range(len(positions)-1):
-            self.compartments[(i)] = Compartment((i), pos=(positions[i],positions[i+1]), array_ID=self.array_ID)
+            self.compartments[(i)] = Compartment1D((i), pos=[(positions[i],positions[i+1])], array_ID=self.array_ID)
 
         # add connections
         for i in range(self.n_compartments):
@@ -144,7 +149,7 @@ class CompartmentArray2D(CompartmentArray):
             posx = (x_pos[i],x_pos[i+1])
             for j in range(self.ny-1):
                 posy = (y_pos[j],y_pos[j+1])
-                self.compartments[(i,j)] = Compartment((i,j), pos=[posx,posy], array_ID=self.array_ID)
+                self.compartments[(i,j)] = Compartment2D((i,j), pos=[posx,posy], array_ID=self.array_ID)
 
         # add connections
         for i in range(self.nx):
@@ -192,40 +197,6 @@ class CompartmentArray2D(CompartmentArray):
             for j in range(self.ny):
                 self.compartments[(i,j)].connect(other_array.compartments[(i,j)],conn_type)
                 other_array.compartments[(i,j)].connect(self.compartments[(i,j)],conn_type)
-
-    def append_1D(self,other_1D_array,conn_type,append_side=None):
-        """Adds on a 1D array to this 2D array.
-
-        append_side governs where the 1D array is added and must be 
-        one of the following: [x-, x+, y-, y+].
-        
-        """
-
-        assert append_side in ['x-','x+','y-','y+'], "append_side must be set to one of [x-,x+,y-,y+]"
-
-        if append_side[0] == 'x':
-            assert len(self.y_pos) == other_1D_array.n_compartments, "incompatible dimensions for append operation"
-
-            if append_side[1] == '-':
-                for j in range(len(self.y_pos)):
-                    self.compartments[(0,j)].connect(other_array.compartments[(j)],conn_type)
-                    other_array.compartments[(j)].connect(self.compartments[(0,j)],conn_type)
-            else:
-                for j in range(len(self.y_pos)):
-                    self.compartments[(self.nx-1,j)].connect(other_array.compartments[(j)],conn_type)
-                    other_array.compartments[(j)].connect(self.compartments[(self.nx-1,j)],conn_type)
-            
-        if append_side[0] == 'y':
-            assert len(self.x_pos) == other_1D_array.n_compartments, "incompatible dimensions for append operation"
-
-            if append_side[1] == '-':
-                for i in range(len(self.x_pos)):
-                    self.compartments[(i,0)].connect(other_array.compartments[(i)],conn_type)
-                    other_array.compartments[(i)].connect(self.compartments[(i,0)],conn_type)
-            else:
-                for i in range(len(self.x_pos)):
-                    self.compartments[(i,self.ny-1)].connect(other_array.compartments[(i)],conn_type)
-                    other_array.compartments[(i)].connect(self.compartments[(i,self.ny-1)],conn_type)
         
 class CompartmentArray3D(CompartmentArray):
     """Uses a 3D array of cubic compartments, which are connected
@@ -280,7 +251,7 @@ class CompartmentArray3D(CompartmentArray):
                     lz = z_pos[k+1]-z_pos[k]
                     posz = (z_pos[k],z_pos[k+1])
                     sa = {'xy' : lx*ly, 'yz' : ly*lz, 'xz' : lx*lz}
-                    self.compartments[(i,j,k)] = Compartment((i,j,k),
+                    self.compartments[(i,j,k)] = Compartment3D((i,j,k),
                                                              pos=[posx,posy,posz],
                                                              array_ID=self.array_ID,
                                                              surface_area=sa)

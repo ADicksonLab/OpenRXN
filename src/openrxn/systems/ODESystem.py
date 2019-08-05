@@ -66,15 +66,17 @@ class ODESystem(System):
 
         Formulates each derivative equation as:
         
-        dq[i]/dt =  sum_{j in sources}  k_j * prod_{k} q_k
-                  - sum_{j in sinks}    k_j * prod_{k} q_k
+        dq[i]/dt =  sum_{j in sources}  k_j * prod_{k} q_k * n_per_ij
+                  - sum_{j in sinks}    k_j * prod_{k} q_k * n_per_ij
 
         To construct the derivative function, it passes a list of 
         sources, where the elements of the list are:
 
-        (k_j, [q_k0, q_k1...])
+        (k_j, [q_k0, q_k1...], n_per_ij)
 
-        and a similar list of sinks.  The rates passed are in units of s^-1.
+        and a similar list of sinks.  The quantity n_per_ij is the number of 
+        species i that are produced (or consumed) by reaction j.
+        The rates passed are in units of s^-1.
 
         Inputs:
         
@@ -95,6 +97,7 @@ class ODESystem(System):
             # involve this species
             for r in c.reactions:
                 if s in r.reactant_IDs:
+                    s_idx = r.reactant_IDs.index(s)
                     if r.kf > 0:
                         # append forward reaction to sinks
                         q_list = []
@@ -102,12 +105,12 @@ class ODESystem(System):
                         for j,x in enumerate(r.reactants):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
-                        if n_r - 1 > 0:
+                        if n_r - 1 > 0 and c.volume is not None:
                             vol_fac = c.volume**(n_r-1)
-                            sinks.append((r.kf/vol_fac,q_list))
+                            rate = r.kf/vol_fac
                         else:
-                            sinks.append((r.kf,q_list))
-
+                            rate = r.kf
+                        sinks.append((rate, q_list, r.stoich_r[s_idx]))
                     if r.kr > 0:
                         # append reverse reaction to sources
                         q_list = []
@@ -115,13 +118,15 @@ class ODESystem(System):
                         for j,x in enumerate(r.products):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
-                        if n_p - 1 > 0:
+                        if n_p - 1 > 0 and c.volume is not None:
                             vol_fac = c.volume**(n_p-1)
-                            sources.append((r.kr/vol_fac,q_list))
+                            rate = r.kr/vol_fac
                         else:
-                            sources.append((r.kr,q_list))
+                            rate = r.kr/vol_fac
+                        sources.append((rate, q_list, r.stoich_r[s_idx]))
                     
-                elif s in r.product_IDs:
+                if s in r.product_IDs:
+                    s_idx = r.product_IDs.index(s)
                     if r.kf > 0:
                         # append forward reaction to sources
                         q_list = []
@@ -129,11 +134,12 @@ class ODESystem(System):
                         for j,x in enumerate(r.reactants):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
-                        if n_r - 1 > 0:
+                        if n_r - 1 > 0 and c.volume is not None:
                             vol_fac = c.volume**(n_r-1)
-                            sources.append((r.kf/vol_fac,q_list))
+                            rate = r.kf/vol_fac
                         else:
-                            sources.append((r.kf,q_list))
+                            rate = r.kf
+                        sources.append((rate, q_list, r.stoich_p[s_idx]))
 
                     if r.kr > 0:
                         # append reverse reaction to sinks
@@ -142,20 +148,23 @@ class ODESystem(System):
                         for j,x in enumerate(r.products):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
-                        if n_p - 1 > 0:
+                        if n_p - 1 > 0 and c.volume is not None:
                             vol_fac = c.volume**(n_p-1)
-                            sinks.append((r.kr/vol_fac,q_list))
+                            rate = r.kr/vol_fac
                         else:
-                            sinks.append((r.kr,q_list))
+                            rate = r.kr
+                        sinks.append((rate, q_list, r.stoich_p[s_idx]))
 
             # look through connections for those that involve this species
             for other_lab, conn in c.connections.items():
                 if s in conn[1].species_rates:
                     # add "out" diffusion process
-                    sinks.append((conn[1].species_rates[s][0]/c.volume,[i]))
+                    sinks.append((conn[1].species_rates[s][0]/c.volume, [i], 1))
 
                     # add "in" diffusion process
-                    sources.append((conn[1].species_rates[s][1]/conn[0].volume,[self.state.index[other_lab][s]]))
+                    sources.append((conn[1].species_rates[s][1]/conn[0].volume,
+                                    [self.state.index[other_lab][s]],
+                                    1))
                     
             dqdt.append(DerivFuncBuilder(sources, sinks))
 

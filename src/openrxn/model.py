@@ -162,6 +162,9 @@ class FlatModel(object):
     def __init__(self):
         self.compartments = {}
 
+    def n_compartments(self):
+        return len(self.compartments)
+        
     def add_compartment(self,compartment):
         newID = makeID(compartment.array_ID,compartment.ID)
         if newID in self.compartments.keys():

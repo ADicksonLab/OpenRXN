@@ -30,7 +30,7 @@ class Connection(object):
 
 class AnisotropicConnection(Connection):
     
-    def __init__(self, species_rates):
+    def __init__(self, species_rates,dim=3):
         """AnisotropicConnections are initialized with a dictionary
         of species_rates, where the keys are Species IDs and the 
         values are tuples of transport rates (k_out,k_in).
@@ -38,16 +38,18 @@ class AnisotropicConnection(Connection):
         Care should be taken to make sure these are applied in the
         right direction!
 
-        Rates should be specified in units of L/s, as they are 
+        Rates should be specified in units of nm**d/s, where d is 
+        the dimensionality of the compartments, as they are 
         divided by compartment volumes before system integration.
         """
         self.species_rates = species_rates
+        self.dim = dim
 
         for s in self.species_rates:
             if type(self.species_rates[s]) is not tuple or len(self.species_rates[s]) != 2:
                 raise ValueError("Error! Elements of species_rates dictionary should be tuples of length 2")
-            self.species_rates[s][0].ito(unit.liter/unit.sec)
-            self.species_rates[s][1].ito(unit.liter/unit.sec)
+            self.species_rates[s][0].ito(unit.nm**self.dim/unit.sec)
+            self.species_rates[s][1].ito(unit.nm**self.dim/unit.sec)
 
 
     def _flip_tuple(t):
@@ -62,26 +64,28 @@ class AnisotropicConnection(Connection):
             
 class IsotropicConnection(Connection):
 
-    def __init__(self, species_rates):
+    def __init__(self, species_rates,dim=3):
         """IsotropicConnections are initialized with a dictionary
         of species_rates, where the keys are Species IDs and the 
         values are transport rates.
 
-        Rates should be specified in units of L/s, as they are 
+        Rates should be specified in units of nm**d/s, where d is
+        the dimensionality of the compartments, as they are 
         divided by compartment volumes before system integration.
         """
         self.species_rates = species_rates
+        self.dim = dim
 
         for s in self.species_rates:
             k = self.species_rates[s]
             if type(k) is not tuple:
                 self.species_rates[s] = (k,k)
-            self.species_rates[s][0].ito(unit.liter/unit.sec)
-            self.species_rates[s][1].ito(unit.liter/unit.sec)
+            self.species_rates[s][0].ito(unit.nm**self.dim/unit.sec)
+            self.species_rates[s][1].ito(unit.nm**self.dim/unit.sec)
 
 class FicksConnection(IsotropicConnection):
 
-    def __init__(self, species_d_constants, surface_area=None, ic_distance=None):
+    def __init__(self, species_d_constants, surface_area=None, ic_distance=None, dim=3):
         """FicksConnection types use diffusion constants for each
         Species, together with the widths and adjoining surface area
         of the compartments, to determine rate constants for transport.
@@ -116,6 +120,7 @@ class FicksConnection(IsotropicConnection):
         self.species_d_constants = species_d_constants
         self.surface_area = surface_area
         self.ic_distance = ic_distance
+        self.dim = dim
 
     def resolve(self):
         """This returns an IsotropicConnection that does not 
@@ -127,6 +132,6 @@ class FicksConnection(IsotropicConnection):
         rates = {}
         for s,d in self.species_d_constants.items():
             rates[s] = d*self.surface_area/self.ic_distance
-            rates[s].ito(unit.liter/unit.sec)
+            rates[s].ito(unit.nm**self.dim/unit.sec)
             
         return IsotropicConnection(rates)

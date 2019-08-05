@@ -20,23 +20,14 @@ class Compartment(object):
     is connected to.
 
     Upon initialization, both of these lists are empty.
-
-    surface_area : dict
-    An optional argument to describe the surface area of the faces
-    'xy', 'yz', 'xz'.  Used by CompartmentArray3D for FicksConnections.
     """
     
-    def __init__(self, ID, pos=[], array_ID=None, surface_area=None):
+    def __init__(self, ID, pos=[], array_ID=None):
         self.ID = ID
         self.reactions = []
         self.connections = {}
         self.pos = pos
         self.array_ID = array_ID
-        self.surface_area = surface_area
-        self.volume = None
-        if len(pos)==3:
-            self.volume = (pos[0][1]-pos[0][0])*(pos[1][1]-pos[1][0])*(pos[2][1]-pos[2][0])
-            self.volume.to(unit.L)
         
     def add_rxn_to_compartment(self, rxn):
         """Adds a reaction to a compartment."""
@@ -45,6 +36,11 @@ class Compartment(object):
         else:
             self.reactions.append(rxn)
 
+    def add_rxns_to_compartment(self, rxns):
+        """Adds a list of reactions to a compartment."""
+        for rxn in rxns:
+            self.add_rxn_to_compartment(rxn)
+            
     def show_all_rxns(self):
         """Returns a list of rxn strings with all reactions in the compartment"""
         rxn_strings = []
@@ -85,11 +81,46 @@ class Compartment(object):
             new_aID = None
         else:
             new_aID = self.array_ID
-        
-        new_comp = Compartment(newID, pos=self.pos, array_ID=new_aID, surface_area=self.surface_area)
+
+        if hasattr(self,'surface_area'):
+            new_comp = type(self)(newID, pos=self.pos, array_ID=new_aID, surface_area=self.surface_area)
+        else:
+            new_comp = type(self)(newID, pos=self.pos, array_ID=new_aID)
+            
         new_comp.connections = self.connections
         new_comp.reactions = self.reactions
 
         return new_comp
 
-            
+class Compartment1D(Compartment):
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        assert len(self.pos)==1, "Error! position must be of length 1 for Compartment1D objects"
+        self.volume = (self.pos[0][1]-self.pos[0][0])
+        self.volume.to(unit.nm)
+
+class Compartment2D(Compartment):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        assert len(self.pos)==2, "Error! position must be of length 2 for Compartment2D objects"
+        self.volume = (self.pos[0][1]-self.pos[0][0])*(self.pos[1][1]-self.pos[1][0])
+        self.volume.to(unit.nm**2)
+
+class Compartment3D(Compartment):
+    """
+    surface_area : dict
+    An optional argument to describe the surface area of the faces
+    'xy', 'yz', 'xz'.  Used by CompartmentArray3D for FicksConnections.
+    """
+
+    def __init__(self, *args, surface_area=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.surface_area = surface_area
+        assert len(self.pos)==3, "Error! position must be of length 3 for Compartment3D objects"
+        self.volume = (self.pos[0][1]-self.pos[0][0])*(self.pos[1][1]-self.pos[1][0])*(self.pos[2][1]-self.pos[2][0])
+        self.volume.to(unit.nm**3)
