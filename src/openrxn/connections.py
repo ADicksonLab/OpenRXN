@@ -135,3 +135,35 @@ class FicksConnection(IsotropicConnection):
             rates[s].ito(unit.nm**self.dim/unit.sec)
             
         return IsotropicConnection(rates)
+
+class ResConnection(AnisotropicConnection):
+
+    def __init__(self, species_d_constants, surface_area=None, ic_distance=None, dim=3, face=None):
+        """
+        ResConnections are special connections from a compartment to a 
+        reservoir.  They are resolved similarly to a FicksConnection.
+
+        face is a string input, equal to either 'x', 'y' or 'z', 
+        denoting along which axis the ResConnection takes place.
+        """
+        
+        self.species_d_constants = species_d_constants
+        self.surface_area = surface_area
+        self.ic_distance = ic_distance
+        self.dim = dim
+        self.face = face
+
+    def resolve(self):
+        """This returns an AnisotropicConnection that does not 
+        require any information about the Species, or the arrays"""
+
+        if self.surface_area is None or self.ic_distance is None:
+            raise ValueError("Error!  This connection is not ready to be resolved.")
+        species_list = self.species_d_constants.keys()
+        rates = {}
+        for s,d in self.species_d_constants.items():
+            rates[s] = (d*self.surface_area/self.ic_distance, d*self.surface_area/self.ic_distance)
+            rates[s][0].ito(unit.nm**self.dim/unit.sec)
+            rates[s][1].ito(unit.nm**self.dim/unit.sec)
+            
+        return AnisotropicConnection(rates)

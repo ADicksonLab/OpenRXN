@@ -6,6 +6,7 @@ from openrxn import unit
 from openrxn.systems.state import State
 from openrxn.systems.deriv import DerivFuncBuilder
 from openrxn.systems.system import System
+from openrxn.compartments.compartment import Reservoir
 
 from scipy.integrate import solve_ivp
 import numpy as np
@@ -76,7 +77,18 @@ class ODESystem(System):
 
         and a similar list of sinks.  The quantity n_per_ij is the number of 
         species i that are produced (or consumed) by reaction j.
-        The rates passed are in units of s^-1.
+        The rates passed are in units such that k_j * prod_{k} q_k has units 
+        of s^-1.
+
+        There is a special list of sources that come from Reservoir compartments,
+        whose concentrations are not part of the state vector, but instead 
+        vary deterministically as a function of time.  The elements of 
+        source_reservoir lists are formatted as:
+
+        (k_j, conc_func, n_per_ij)
+
+        where conc_func is a link to the concentration function, which returns
+        the concentration of the reservoir, given time as an input.
 
         Inputs:
         
@@ -91,6 +103,7 @@ class ODESystem(System):
             s = self.state.species[i]
 
             sources = []
+            sources_reservoir = []
             sinks = []
             
             # look through the reactions in this compartment for ones that
@@ -122,7 +135,7 @@ class ODESystem(System):
                             vol_fac = c.volume**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
-                            rate = r.kr/vol_fac
+                            rate = r.kr
                         sources.append((rate, q_list, r.stoich_r[s_idx]))
                     
                 if s in r.product_IDs:
@@ -158,15 +171,21 @@ class ODESystem(System):
             # look through connections for those that involve this species
             for other_lab, conn in c.connections.items():
                 if s in conn[1].species_rates:
+                                  
                     # add "out" diffusion process
                     sinks.append((conn[1].species_rates[s][0]/c.volume, [i], 1))
 
                     # add "in" diffusion process
-                    sources.append((conn[1].species_rates[s][1]/conn[0].volume,
-                                    [self.state.index[other_lab][s]],
-                                    1))
+                    if isinstance(self.model.compartments[other_lab],Reservoir):
+                        sources_reservoir.append((conn[1].species_rates[s][1],
+                                        self.model.compartments[other_lab].conc_funcs[s],
+                                        1))
+                    else:
+                        sources.append((conn[1].species_rates[s][1]/conn[0].volume,
+                                        [self.state.index[other_lab][s]],
+                                        1))
                     
-            dqdt.append(DerivFuncBuilder(sources, sinks))
+            dqdt.append(DerivFuncBuilder(sources, sinks, sources_reservoir))
 
         return dqdt
                             

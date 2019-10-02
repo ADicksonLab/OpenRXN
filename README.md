@@ -13,3 +13,11 @@ A free, open-source tool for modeling chemical reaction networks in Python.  Off
 * Numpy
 * Scipy
 * Pint
+
+## Installation
+Nothing fancy for now, just add the src/ directory to your PYTHONPATH:
+
+```
+cd OpenRXN/src
+export PYTHONPATH=$PYTHONPATH:`pwd`
+```

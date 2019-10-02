@@ -18,6 +18,8 @@ kf = 0/unit.sec
 r1 = Reaction('combustion',[m,o2],[co2,w],[1,2],[1,2],kf=kf,kr=kr)
 """
 
+import logging
+
 class Species(object):
     """Species can be either reactants or products and can
     interconvert through Reactions. Each species object must 

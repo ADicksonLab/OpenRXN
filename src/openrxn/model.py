@@ -7,7 +7,7 @@ using a template, and then edited.
 from openrxn.compartments.compartment import Compartment
 from openrxn.reactions import Reaction
 from openrxn.compartments.ID import makeID
-from openrxn.connections import FicksConnection
+from openrxn.connections import FicksConnection, ResConnection
 
 import numpy as np
 import networkx as nx
@@ -88,8 +88,10 @@ class Model(object):
         # resolve FicksConnections
         for c in flatmodel.compartments.values():
             for label,conn in c.connections.items():
-                # conn is a tuple (other_connection, connection)
-                if isinstance(conn[1],FicksConnection):
+                # conn is a tuple (other_compartment, connection)
+                if isinstance(conn[1],ResConnection):
+                    self.resolve_res(c,conn[0],conn[1])
+                elif isinstance(conn[1],FicksConnection):
                     self.resolve_ficks(c,conn[0],conn[1])
 
         return flatmodel
@@ -146,6 +148,42 @@ class Model(object):
         c1.connect(c2,new_conn,warn_overwrite=False)
         c2.connect(c1,new_conn,warn_overwrite=False)
 
+    def resolve_res(self,c1,res,conn):
+        """If surface area and inter-compartment distance are not attached
+        to the ResConnection, this function will attempt to compute them
+        using the c1 positions and Array properties.
+
+        Note that the surface area calculation only works for cubic compartments
+        that are fully adjoining on one face.
+
+        This function then calls the resolve method of the ResConnection and
+        returns the corresponding AnisotropicConnection."""
+
+        if conn.surface_area is None:
+            if conn.face in ['x','y','z']:
+                if conn.face == 'x':
+                    conn.surface_area = c1.surface_area['yz']
+                elif conn.face == 'y':
+                    conn.surface_area = c1.surface_area['xz']
+                elif conn.face == 'z':
+                    conn.surface_area = c1.surface_area['xy']
+            else:
+                raise ValueError("Error! To resolve the ResConnection, we need to know the surface area of the interface.")
+
+        if conn.ic_distance is None:
+            if conn.face in ['x','y','z']:
+                if conn.face == 'x':
+                    conn.ic_distance = c1.pos[0][1] - c1.pos[0][0]
+                elif conn.face == 'y':
+                    conn.ic_distance = c1.pos[1][1] - c1.pos[1][0]
+                elif conn.face == 'z':
+                    conn.ic_distance = c1.pos[2][1] - c1.pos[2][0]
+            else:
+                raise ValueError("Error! To resolve the ResConnection, we need to know the intercompartmental distance.")
+
+        new_conn = conn.resolve()
+        c1.connect(res,new_conn,warn_overwrite=False)
+        
 class FlatModel(object):
     """FlatModel objects have a flat set of compartments with
     quantified diffusion rate constants.  Each compartment is given

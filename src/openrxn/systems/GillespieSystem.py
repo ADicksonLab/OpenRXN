@@ -19,6 +19,7 @@ from openrxn.systems.state import State
 from openrxn.systems.deriv import DerivFuncBuilder
 from openrxn.systems.system import System
 from openrxn.propagators import Gillespie
+from openrxn.compartments.compartment import Reservoir
 
 import numpy as np
 import logging
@@ -119,8 +120,14 @@ class GillespieSystem(System):
                     # Note: volumes must be defined if diffusion processes are occurring
                     #
                     processes.append((self._cast_rate(conn[1].species_rates[s][0]/c.volume),
-                                     [(self.state.index[c.ID][s],1)],
+                                      [(self.state.index[c.ID][s],1)],
                                       [(self.state.index[c.ID][s],-1), (self.state.index[other_lab][s],1)]))
+
+#                    if isinstance(conn[0],Reservoir):
+#                        processes.append((self._cast_rate(conn[1].species_rates[s][0]/c.volume),
+#                                          [(self.state.index[c.ID][s],1)],
+#                                          [(self.state.index[c.ID][s],-1), (self.state.index[other_lab][s],1)]))
+                        
 
             process_update_list = [[] for idx in range(self.state.size)]
             for i,p in enumerate(processes):

@@ -8,6 +8,7 @@ in units of 1/s.  Units are stripped upon initialization.
 """
 
 from openrxn import unit
+import numpy as np
 
 class DerivFuncBuilder(object):
     """
@@ -21,21 +22,28 @@ class DerivFuncBuilder(object):
     and n_per is the number of this species that are 
     produced (for sources) or consumed (for sinks) per reaction
     """
-    def __init__(self,sources,sinks):
-        self.sources = [(s[0].to(1/unit.sec).magnitude,s[1],s[2]) for s in sources]
-        self.sinks = [(s[0].to(1/unit.sec).magnitude,s[1],s[2]) for s in sinks]
+    def __init__(self,sources,sinks,sources_reservoir):
+        #
+        # sources and sinks are kept in the form (prefactor, inds)
+        # where inds is a list of indexes of Q to multiply and prefactor is a scalar
+        #
+        self.terms = []
+        for s in sources:
+            pref = s[0].to(1/unit.sec).magnitude*s[2]
+            if pref > 0:
+                self.terms.append((pref,s[1]))
+                
+        for s in sinks:
+            pref = s[0].to(1/unit.sec).magnitude*s[2]
+            if pref > 0:
+                self.terms.append((-pref,s[1]))
+
+        self.sources_reservoir = [(s[0].to(unit.nm**3/unit.sec).magnitude*s[2], s[1]) for s in sources_reservoir]
         
     def deriv_func(self,Q,t):
         dqdt = 0
-        for tup in self.sources:
-            tmp = 1
-            for idx in tup[1]:
-                tmp *= Q[idx]
-            dqdt += tup[0]*tmp*tup[2]
-        for tup in self.sinks:
-            tmp = 1
-            for idx in tup[1]:
-                tmp *= Q[idx]
-            dqdt -= tup[0]*tmp*tup[2]         
+        for tup in self.terms:
+            dqdt += tup[0]*np.prod(Q[tup[1]])
+        for tup in self.sources_reservoir:
+            dqdt += tup[0] * tup[1](t)
         return dqdt
-
