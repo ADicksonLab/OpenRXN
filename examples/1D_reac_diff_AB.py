@@ -41,11 +41,12 @@ D = Species('D')
 
 # h is the "volume" of the compartment here
 # second order rate coefficients should have units of
-# M^-1 s^-1, or L^d / s, where L is units of length and
+# M^-1 s^-1, or L^d / (s * mol), where L is units of length and
 # d is the dimensionality of the system (here, 1)
 
-k1 = 1e-3/unit.sec*h
-k2 = 1e-2/unit.sec*h
+conc = 1.0*unit.mol/h
+k1 = 1e-3/unit.sec/conc
+k2 = 1e-2/unit.sec/conc
 k3 = 1.2/unit.sec
 k4 = 1.0/unit.sec
 

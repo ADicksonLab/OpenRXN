@@ -88,7 +88,7 @@ class GillespieSystem(System):
                         delta_list.append((self.state.index[c.ID][x.ID],-r.stoich_r[j]))
                         n_r += r.stoich_r[j]
                     if c.volume is not None and n_r - 1 > 0:
-                        vol_fac = c.volume**(n_r-1)
+                        vol_fac = (c.volume/unit.mol)**(n_r-1)
 
                     for j,x in enumerate(r.products):
                         delta_list.append((self.state.index[c.ID][x.ID],r.stoich_p[j]))
@@ -109,7 +109,7 @@ class GillespieSystem(System):
                         q_list.append((self.state.index[c.ID][x.ID],r.stoich_p[j]))
                         n_r += r.stoich_p[j]
                     if c.volume is not None and n_r - 1 > 0:
-                        vol_fac = c.volume**(n_r-1)
+                        vol_fac = (c.volume/unit.mol)**(n_r-1)
 
                     processes.append((self._cast_rate(r.kr/vol_fac),q_list,delta_list))
 

@@ -63,7 +63,9 @@ class ODESystem(System):
     def _build_dqdt(self):
         """Uses a model to build a list of derivative functions, with 
         indices that are consistent with the state vector.  self.dqdt[i], 
-        calculates the rate of change of self.q_val[i] .
+        calculates the rate of change of self.q_val[i], which holds the 
+        amount of quantity i (a particular species in a particular compartment)
+        in mol.
 
         Formulates each derivative equation as:
         
@@ -119,7 +121,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
                         if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = c.volume**(n_r-1)
+                            vol_fac = (c.volume/unit.mol)**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -132,7 +134,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
                         if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = c.volume**(n_p-1)
+                            vol_fac = (c.volume/unit.mol)**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
@@ -148,7 +150,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
                         if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = c.volume**(n_r-1)
+                            vol_fac = (c.volume/unit.mol)**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -162,7 +164,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
                         if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = c.volume**(n_p-1)
+                            vol_fac = (c.volume/unit.mol)**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
