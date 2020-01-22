@@ -88,6 +88,7 @@ class Compartment(object):
         else:
             new_comp = type(self)(newID, pos=self.pos, array_ID=new_aID)
             
+        new_comp.volume = self.volume
         new_comp.connections = self.connections
         new_comp.reactions = self.reactions
 
