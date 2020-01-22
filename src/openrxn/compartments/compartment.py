@@ -28,7 +28,7 @@ class Compartment(object):
         self.connections = {}
         self.pos = pos
         self.array_ID = array_ID
-        self.volume = None
+        self.volume = volume
         
     def add_rxn_to_compartment(self, rxn):
         """Adds a reaction to a compartment."""
