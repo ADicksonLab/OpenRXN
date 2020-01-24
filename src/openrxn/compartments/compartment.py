@@ -136,6 +136,8 @@ class Reservoir(Compartment):
         super().__init__(*args, **kwargs)
 
         self.conc_funcs = {}
+
+        # add keys from concs into self.conc_funcs
         for key in concs.keys():
             # convert concentrations to number of molecules per
             # nanometer**3
@@ -147,8 +149,9 @@ class Reservoir(Compartment):
             
             self.conc_funcs[key] = tmp_conc_func
 
+        # add keys from conc_funcs into self.conc_funcs
         for key in conc_funcs.keys():
-            if key in self.conc_funcs:
+            if key in concs:
                 raise ValueError("Error! Same quantity passed in both concs and conc_funcs!")
             if not callable(conc_funcs[key]):
                 raise ValueError("Error! conc_funcs[{0}] is not callable!".format(key))
