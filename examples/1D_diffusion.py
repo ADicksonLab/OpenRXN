@@ -33,7 +33,7 @@ D = d*h**2
 
 # create a Model
 boundaries = np.linspace(0,L.magnitude,K+1)*L.units
-conn = IsotropicConnection({'A' : d*h},dim=1)
+conn = IsotropicConnection({'A' : d},dim=1)
 comp_array = CompartmentArray1D('main',boundaries,conn)
 model = Model(arrays=[comp_array])
 flat_model = model.flatten()

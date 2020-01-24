@@ -51,7 +51,7 @@ for i in range(10):
     plt.plot(t,y,label='run {0}'.format(i))
 
 # this result should look like Figure 2.1 of Erban et al
-
+plt.show()
 
 
 

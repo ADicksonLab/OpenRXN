@@ -7,6 +7,7 @@ from openrxn.systems.state import State
 from openrxn.systems.deriv import DerivFuncBuilder
 from openrxn.systems.system import System
 from openrxn.compartments.compartment import Reservoir
+from openrxn.connections import DivByVConnection
 
 from scipy.integrate import solve_ivp
 import numpy as np
@@ -175,7 +176,10 @@ class ODESystem(System):
                 if s in conn[1].species_rates:
                                   
                     # add "out" diffusion process
-                    sinks.append((conn[1].species_rates[s][0]/c.volume, [i], 1))
+                    if isinstance(conn,DivByVConnection):
+                        sinks.append((conn[1].species_rates[s][0]/c.volume, [i], 1))
+                    else:
+                        sinks.append((conn[1].species_rates[s][0], [i], 1))
 
                     # add "in" diffusion process
                     if isinstance(self.model.compartments[other_lab],Reservoir):
@@ -183,9 +187,14 @@ class ODESystem(System):
                                         self.model.compartments[other_lab].conc_funcs[s],
                                         1))
                     else:
-                        sources.append((conn[1].species_rates[s][1]/conn[0].volume,
-                                        [self.state.index[other_lab][s]],
-                                        1))
+                        if isinstance(conn,DivByVConnection):
+                            sources.append((conn[1].species_rates[s][1]/conn[0].volume,
+                                            [self.state.index[other_lab][s]],
+                                            1))
+                        else:
+                            sources.append((conn[1].species_rates[s][1],
+                                            [self.state.index[other_lab][s]],
+                                            1))
                     
             dqdt.append(DerivFuncBuilder(sources, sinks, sources_reservoir))
 

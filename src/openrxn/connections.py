@@ -2,23 +2,16 @@
 In some cases the transport can be described by a first-order
 rate equation, e.g.:
 
-d_n1/dt = -k12 * n1/V1 + k21 * n2/V2
-d_n2/dt = -k21 * n2/V2 + k12 * n1/V1
+d_n1/dt = -k12 * n1 + k21 * n2
+d_n2/dt = -k21 * n2 + k12 * n1
 
 where nX is the number of a given species in compartment X,
-VX is the volume of compartment X and kAB is a rate
-constant governing transport between compartment A and B.
+kAB is a rate constant governing transport between compartment 
+A and B.
 
 A note on units:
-The k values in the above equation are in units of volume/sec,
+The k values in the above equation are in units of 1/sec,
 and this is what is stored in the connection objects.
-When building a the differential equations in the system object
-(system.dqdt) these are divided by the compartment volume, and 
-have units of 1/s.
-
-The convention here is to keep all rate constants in units of
-unit.liter/unit.sec.
-
 """
 
 from . import unit
@@ -38,19 +31,15 @@ class AnisotropicConnection(Connection):
         Care should be taken to make sure these are applied in the
         right direction!
 
-        Rates should be specified in units of nm**d/s, where d is 
-        the dimensionality of the compartments, as they are 
-        divided by compartment volumes before system integration.
+        Rates should be specified in units of 1/s.
         """
         self.species_rates = species_rates
-        self.dim = dim
 
         for s in self.species_rates:
             if type(self.species_rates[s]) is not tuple or len(self.species_rates[s]) != 2:
                 raise ValueError("Error! Elements of species_rates dictionary should be tuples of length 2")
-            self.species_rates[s][0].ito(unit.nm**self.dim/unit.sec)
-            self.species_rates[s][1].ito(unit.nm**self.dim/unit.sec)
-
+            self.species_rates[s][0].ito(1/unit.sec)
+            self.species_rates[s][1].ito(1/unit.sec)
 
     def _flip_tuple(t):
         return (t[1],t[0])
@@ -69,9 +58,30 @@ class IsotropicConnection(Connection):
         of species_rates, where the keys are Species IDs and the 
         values are transport rates.
 
-        Rates should be specified in units of nm**d/s, where d is
-        the dimensionality of the compartments, as they are 
-        divided by compartment volumes before system integration.
+        Rates should be specified in units of 1/s.
+        """
+        self.species_rates = species_rates
+        self.dim = dim
+
+        for s in self.species_rates:
+            k = self.species_rates[s]
+            if type(k) is not tuple:
+                self.species_rates[s] = (k,k)
+            self.species_rates[s][0].ito(1/unit.sec)
+            self.species_rates[s][1].ito(1/unit.sec)
+
+class DivByVConnection(Connection):
+
+    def __init__(self, species_rates,dim=3):
+        """DivByVConnections are initialized with a dictionary
+        of species_rates, where the keys are Species IDs and the 
+        values are transport rates.
+
+        Rates should be specified in units of L^d/s, where L is length
+        and d is the compartment volume.
+
+        These connections are divided by the compartment volume
+        when constructing a system.
         """
         self.species_rates = species_rates
         self.dim = dim
@@ -82,8 +92,8 @@ class IsotropicConnection(Connection):
                 self.species_rates[s] = (k,k)
             self.species_rates[s][0].ito(unit.nm**self.dim/unit.sec)
             self.species_rates[s][1].ito(unit.nm**self.dim/unit.sec)
-
-class FicksConnection(IsotropicConnection):
+            
+class FicksConnection(Connection):
 
     def __init__(self, species_d_constants, surface_area=None, ic_distance=None, dim=3):
         """FicksConnection types use diffusion constants for each
@@ -100,12 +110,14 @@ class FicksConnection(IsotropicConnection):
 
         This is separated into two first order diffusion reactions:
         
-        F21 = D * A * C2/DeltaX = C2*k21
-        F12 = D * A * C1/DeltaX = C1*k12
+        F21 = D * A * C2/DeltaX = n2*kV21 / V2
+        F12 = D * A * C1/DeltaX = n1*kV12 / V1
 
-        where k12 = D*A/(DeltaX) and k21 = D*A/(DeltaX) are the 
-        first order rate constants of diffusion between 
-        compartment 1 and compartment 2 (in L/s)
+        where kV12 = D*A/DeltaX and kV21 = D*A/DeltaX are equal to the
+        compartment volumes times the first order rate constants of 
+        diffusion between compartment 1 and compartment 2 (in 1/s).  
+        kV12 and kV21 will be used to construct a DivByVConnection 
+        object when the FicksConnection is resolved.
 
         surface_area is the surface area of the connecting interface between 
         the compartments (optional)
@@ -131,12 +143,15 @@ class FicksConnection(IsotropicConnection):
         species_list = self.species_d_constants.keys()
         rates = {}
         for s,d in self.species_d_constants.items():
+
+            # how are you going to get this volume?
+            
             rates[s] = d*self.surface_area/self.ic_distance
             rates[s].ito(unit.nm**self.dim/unit.sec)
             
-        return IsotropicConnection(rates)
+        return DivByVConnection(rates,self.dim)
 
-class ResConnection(AnisotropicConnection):
+class ResConnection(Connection):
 
     def __init__(self, species_d_constants, surface_area=None, ic_distance=None, dim=3, face=None):
         """
@@ -162,8 +177,7 @@ class ResConnection(AnisotropicConnection):
         species_list = self.species_d_constants.keys()
         rates = {}
         for s,d in self.species_d_constants.items():
-            rates[s] = (d*self.surface_area/self.ic_distance, d*self.surface_area/self.ic_distance)
-            rates[s][0].ito(unit.nm**self.dim/unit.sec)
-            rates[s][1].ito(unit.nm**self.dim/unit.sec)
+            rates[s] = d*self.surface_area/self.ic_distance
+            rates[s].ito(unit.nm**self.dim/unit.sec)
             
-        return AnisotropicConnection(rates)
+        return DivByVConnection(rates,self.dim)

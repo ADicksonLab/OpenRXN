@@ -34,3 +34,5 @@ results = sys.run(30)
 # this result should look like Figure 2.1 of Erban et al
 import matplotlib.pyplot as plt
 plt.plot(results.t,results.y[0])
+
+plt.show()

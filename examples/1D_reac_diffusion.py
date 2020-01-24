@@ -40,7 +40,7 @@ rxns.append(Reaction('syn',[],[A],[],[1],kf=kp*h))
 
 # create a Model
 boundaries = np.linspace(0,L.magnitude,K+1)*L.units
-conn = IsotropicConnection({'A' : d*h},dim=1)
+conn = IsotropicConnection({'A' : d},dim=1)
 comp_array = CompartmentArray1D('main',boundaries,conn)
 comp_array.add_rxn_to_array(rxns[0])
 for c in comp_array.compartments.values():

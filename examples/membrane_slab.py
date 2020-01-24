@@ -36,8 +36,7 @@ z_pos2 = np.array([0,1])*unit.nanometer
 upper_slab = CompartmentArray3D('upper_slab',x_pos,y_pos,z_pos2,in_slab,periodic=[True,True,False])
 upper_slab.add_rxn_to_array(binding)
 
-vol = 100*(unit.nanometer)**3
-between_slab = IsotropicConnection({'drug' : vol*1e-5/unit.sec})
+between_slab = IsotropicConnection({'drug' : 1e-5/unit.sec})
 lower_slab.join3D(upper_slab,between_slab,append_side='z+')
 
 # define compartment for bulk
@@ -45,7 +44,7 @@ bulk_to_bulk = FicksConnection({'drug' : 1e-5*unit.cm**2/unit.sec})
 z_pos3 = np.linspace(1,25,23)*unit.nanometer
 bulk = CompartmentArray3D('bulk',x_pos,y_pos,z_pos3,bulk_to_bulk,periodic=[True,True,False])
 
-slab_to_bulk = AnisotropicConnection({'drug' : (vol*1e-5/unit.sec, vol*1e-1/unit.sec)})
+slab_to_bulk = AnisotropicConnection({'drug' : (1e-5/unit.sec, 1e-1/unit.sec)})
 bulk.join3D(upper_slab,slab_to_bulk,append_side='z-')
 
 # create model

@@ -145,6 +145,7 @@ class Model(object):
             conn.ic_distance = np.sqrt(conn.ic_distance)
 
         new_conn = conn.resolve()
+        # Note: Fick's connections are isotropic
         c1.connect(c2,new_conn,warn_overwrite=False)
         c2.connect(c1,new_conn,warn_overwrite=False)
 
@@ -157,7 +158,7 @@ class Model(object):
         that are fully adjoining on one face.
 
         This function then calls the resolve method of the ResConnection and
-        returns the corresponding AnisotropicConnection."""
+        returns the corresponding DivByVConnection."""
 
         if conn.surface_area is None:
             if conn.face in ['x','y','z']:

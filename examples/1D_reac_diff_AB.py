@@ -58,7 +58,7 @@ rxns.append(Reaction('birth_B',[],[B],[],[1],kf=k4))
 
 # create a Model
 boundaries = np.linspace(0,L.magnitude,K+1)*L.units
-conn = IsotropicConnection({'A' : d*h, 'B' : d*h},dim=1)
+conn = IsotropicConnection({'A' : d, 'B' : d},dim=1)
 comp_array = CompartmentArray1D('main',boundaries,conn)
 comp_array.add_rxns_to_array([rxns[0],rxns[1]])
 for c in comp_array.compartments.values():
