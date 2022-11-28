@@ -42,7 +42,7 @@ class GillespieSystem(System):
         new_q, final_t = Gillespie(self.processes,self.process_update_list,t_interval,self.state.q_val)
         self.state.q_val = new_q
 
-        return (new_q, final_t)
+        return {'new_q': new_q, 'final_t': final_t}
 
     def _build_processes(self):
         """

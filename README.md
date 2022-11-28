@@ -13,11 +13,26 @@ A free, open-source tool for modeling chemical reaction networks in Python.  Off
 * Numpy
 * Scipy
 * Pint
+* pandas
+* matplotlib
 
-## Installation
-Nothing fancy for now, just add the src/ directory to your PYTHONPATH:
+## Installation with pip
+
+First, clone the source from github:
 
 ```
-cd OpenRXN/src
-export PYTHONPATH=$PYTHONPATH:`pwd`
+git clone https://github.com/ADicksonLab/OpenRXN.git
 ```
+
+Change into that directory and install using pip:
+
+```
+cd OpenRXN
+pip install .
+```
+
+Check the install by running one of the examples.  E.g.:
+```
+python examples/1D_diffusion.py
+```
+

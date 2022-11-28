@@ -45,6 +45,7 @@ sys = ODESystem(flat_model)
 sys.set_q(np.arange(sys.state.size),0)
 sys.set_q([16,17],500)
 
+print("Running ODE...")
 ode_results = sys.run(240)
 
 fig, ax = plt.subplots(nrows=2,ncols=2)
@@ -75,6 +76,7 @@ ax[1][1].plot(pos_x,ode_results.y[IDs,t4],label='ODE')
 #---
 
 for i in range(5):
+    print(f"Running Gillespie system (run {i+1} of 5)")
     Gillespie_sys = GillespieSystem(flat_model)
     Gillespie_sys.add_reporter(AllReporter(freq=1))
     Gillespie_sys.set_q(np.arange(sys.state.size),0)
@@ -87,4 +89,8 @@ for i in range(5):
     ax[1][1].plot(pos_x,reports[239]['report'],label='run {0}'.format(i))
 
 ax[1][1].legend()
-plt.show()
+plt.tight_layout()
+outname = "1D_diffusion.pdf"
+plt.savefig(outname)
+
+print("Output saved as ",outname)
