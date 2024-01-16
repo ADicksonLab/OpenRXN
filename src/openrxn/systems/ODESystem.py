@@ -122,7 +122,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
                         if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = (c.volume/unit.mol)**(n_r-1)
+                            vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -135,7 +135,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
                         if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = (c.volume/unit.mol)**(n_p-1)
+                            vol_fac = (self.NA*c.volume/unit.mol)**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
@@ -151,7 +151,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
                             n_r += r.stoich_r[j]
                         if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = (c.volume/unit.mol)**(n_r-1)
+                            vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -165,7 +165,7 @@ class ODESystem(System):
                             q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
                             n_p += r.stoich_p[j]
                         if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = (c.volume/unit.mol)**(n_p-1)
+                            vol_fac = (self.NA*c.volume/unit.mol)**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
