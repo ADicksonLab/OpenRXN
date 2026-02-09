@@ -1,4 +1,5 @@
-"""Connections govern the transport between compartments.
+"""
+Connections govern the transport between compartments.
 In some cases the transport can be described by a first-order
 rate equation, e.g.:
 
