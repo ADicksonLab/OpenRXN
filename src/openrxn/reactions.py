@@ -33,7 +33,8 @@ class Species(object):
 
 class Reaction(object):
     """A reaction describes how reactants and products are 
-    related"""
+    related
+    """
 
     def __init__(self, ID, reactants, products, stoich_r, stoich_p, kf=0, kr=0):
         self.ID = ID
