@@ -65,7 +65,7 @@ class Reaction(object):
         Reverse rate constant. 
     """
 
-    def __init__(self, ID, reactants, products, stoich_r, stoich_p, kf=None, kr=None):
+    def __init__(self, ID, reactants, products, stoich_r, stoich_p, kf=0, kr=0):
         self.ID = ID
 
         if len(reactants) != len(stoich_r):
@@ -88,8 +88,8 @@ class Reaction(object):
         self.stoich_r = stoich_r
         self.products = products
         self.stoich_p = stoich_p
-        self.kf = kf if kf is not None else 0
-        self.kr = kr if kr is not None else 0
+        self.kf = kf
+        self.kr = kr 
 
         self.reactant_IDs = [s.ID for s in self.reactants]
         self.product_IDs = [s.ID for s in self.products]
