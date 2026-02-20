@@ -6,7 +6,7 @@ using a template, and then edited.
 
 from openrxn.compartments.compartment import Compartment
 from openrxn.reactions import Reaction
-from openrxn.compartments.ID import makeID
+from openrxn.compartments.ID import make_ID
 from openrxn.connections import FicksConnection, ResConnection
 
 import numpy as np
@@ -205,7 +205,7 @@ class FlatModel(object):
         return len(self.compartments)
         
     def add_compartment(self,compartment):
-        newID = makeID(compartment.array_ID,compartment.ID)
+        newID = make_ID(compartment.array_ID,compartment.ID)
         if newID in self.compartments.keys():
             raise ValueError("Error! Duplicate compartment ID in model ({0})".format(newID))
         self.compartments[newID] = compartment.copy(ID=newID,delete_array_ID=True)
