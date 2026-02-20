@@ -1,7 +1,7 @@
 """Compartments hold a set of reactions and govern the transport
 of material between compartments through connections."""
 
-from openrxn.compartments.ID import makeID
+from openrxn.compartments.ID import make_ID
 from openrxn import unit
 import logging
 
@@ -22,20 +22,22 @@ class Compartment(object):
     Upon initialization, both of these lists are empty.
     """
     
-    def __init__(self, ID, pos=[], array_ID=None, volume=None):
+    def __init__(self, ID, pos=None, array_ID=None, volume=None):
         self.ID = ID
+        self._rxn_ids = set()
         self.reactions = []
         self.connections = {}
-        self.pos = pos
+        self.pos = [] if pos is None else list(pos)
         self.array_ID = array_ID
         self.volume = volume
         
     def add_rxn_to_compartment(self, rxn):
         """Adds a reaction to a compartment."""
-        if rxn.ID in [r.ID for r in self.reactions]:
-            logging.warn("Reaction {0} already in compartment {1}".format(rxn.ID,self.ID))
+        if rxn.ID in self._rxn_ids:
+            logging.warning("Reaction {0} already in compartment {1}".format(rxn.ID,self.ID))
         else:
             self.reactions.append(rxn)
+            self._rxn_ids.add(rxn.ID)
 
     def add_rxns_to_compartment(self, rxns):
         """Adds a list of reactions to a compartment."""
@@ -54,20 +56,20 @@ class Compartment(object):
         """Make a connection from this compartment to another one
         using the conn_type connection type."""
 
-        conn_tag = makeID(other_compartment.array_ID,other_compartment.ID)
+        conn_tag = make_ID(other_compartment.array_ID,other_compartment.ID)
         if conn_tag in self.connections and warn_overwrite:
-            self_tag = makeID(self.array_ID,self.ID)
-            logging.warn("Warning: overwriting connection between {0} and {1}".format(self_tag,conn_tag))
+            self_tag = make_ID(self.array_ID,self.ID)
+            logging.warning("Overwriting connection between {0} and {1}".format(self_tag,conn_tag))
 
         self.connections[conn_tag] = (other_compartment, conn_type)
 
     def remove_connection(self, other_compartment):
         """Remove the connection with the other_compartment"""
 
-        conn_tag = makeID(other_compartment.array_ID,other_compartment.ID)
+        conn_tag = make_ID(other_compartment.array_ID,other_compartment.ID)
         if conn_tag not in self.connections:
-            self_tag = makeID(self.array_ID,self.ID)
-            logging.warn("Warning: connection to remove between {0} and {1} does not exist".format(self_tag,conn_tag))
+            self_tag = make_ID(self.array_ID,self.ID)
+            logging.warning("Connection to remove between {0} and {1} does not exist".format(self_tag,conn_tag))
 
         val = self.connections.pop(conn_tag)
 
@@ -89,10 +91,22 @@ class Compartment(object):
             new_comp = type(self)(newID, pos=self.pos, array_ID=new_aID)
             
         new_comp.volume = self.volume
-        new_comp.connections = self.connections
-        new_comp.reactions = self.reactions
+        new_comp.connections = dict(self.connections)
+        new_comp.reactions = list(self.reactions)
+        new_comp._rxn_ids = {r.ID for r in new_comp.reactions}
 
         return new_comp
+
+    def __repr__(self):
+        rxn_strings = self.show_all_rxns()
+        vol_str = str(self.volume) if self.volume is not None else "None"
+        pos_str = tuple(self.pos) if self.pos else None
+
+        return (
+            f"Compartment(ID={self.ID!r}, "
+            f"volume={vol_str}, pos={pos_str}, "
+            f"n_rxns={len(self.reactions)}, n_conns={len(self.connections)})"
+        )
 
 class Compartment1D(Compartment):
     
