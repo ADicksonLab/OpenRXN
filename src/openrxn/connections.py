@@ -71,7 +71,15 @@ class AnisotropicConnection(Connection):
             rev_species_rates[s] = self._flip_tuple(r)
 
         return AnisotropicConnection(rev_species_rates)
-            
+
+    def __repr__(self):
+        rates = {s: (k[0].magnitude, k[1].magnitude) for s, k in self.species_rates.items()}
+        unit_str = str(next(iter(self.species_rates.values()))[0].units)
+        return (f"AnisotropicConnection(dim={self.dim},"
+                f"n_species={len(self.species_rates)},"
+                f"transport_rates={rates}{unit_str})"
+                )
+
 class IsotropicConnection(Connection):
 
     def __init__(self, species_rates,dim=3):
@@ -95,12 +103,20 @@ class IsotropicConnection(Connection):
         self.species_rates = species_rates
         self.dim = dim
 
-        for s,r in self.species_rates.items():
+        for s,k in self.species_rates.items():
             if not isinstance(k,tuple):
-                k = (k,k)
+                self.species_rates[s] = (k,k)
 
             self.species_rates[s][0].ito(1/unit.sec)
             self.species_rates[s][1].ito(1/unit.sec)
+
+    def __repr__(self):
+        rates = {s: (k[0].magnitude, k[1].magnitude) for s, k in self.species_rates.items()}
+        unit_str = str(next(iter(self.species_rates.values()))[0].units)
+        return (f"IsotropicConnection(dim={self.dim},"
+                f"n_species={len(self.species_rates)},"
+                f"transport_rates={rates}{unit_str})"
+                )
 
 class DivByVConnection(Connection):
 
