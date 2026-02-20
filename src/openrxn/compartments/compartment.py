@@ -98,15 +98,13 @@ class Compartment(object):
         return new_comp
 
     def __repr__(self):
-        rxn_strings = self.show_all_rxns()
         vol_str = str(self.volume) if self.volume is not None else "None"
         pos_str = tuple(self.pos) if self.pos else None
 
         return (
             f"Compartment(ID={self.ID!r}, "
             f"volume={vol_str}, pos={pos_str}, "
-            f"n_rxns={len(self.reactions)}, n_connections={len(self.connections)}) \n" 
-            f"Reactions:{rxn_strings}"
+            f"n_rxns={len(self.reactions)}, n_connections={len(self.connections)})" 
         )
 
 class Compartment1D(Compartment):
