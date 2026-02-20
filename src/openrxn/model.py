@@ -251,14 +251,14 @@ class FlatModel(object):
         # add all the nodes
         for c_name, c in self.compartments.items():
             graph.add_node(c_name)
-            graph.node[c_name]['viz'] = {}
+            graph.nodes[c_name]['viz'] = {}
 
             x = scale*0.5*(c.pos[0][0] + c.pos[0][1]).magnitude
             y = scale*0.5*(c.pos[1][0] + c.pos[1][1]).magnitude
             z = scale*0.5*(c.pos[2][0] + c.pos[2][1]).magnitude
             vis_x,vis_y = self._project_xy((x,y,z))
             
-            graph.node[c_name]['viz']['position'] = {'x': float(vis_x), 'y': float(vis_y)}
+            graph.nodes[c_name]['viz']['position'] = {'x': float(vis_x), 'y': float(vis_y)}
 
         # build an edges list
         edges = []
