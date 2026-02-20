@@ -78,6 +78,9 @@ class Reaction(object):
         if not all(isinstance(p, Species) for p in products):
             raise TypeError("Products must be Species objects")
 
+        if kf < 0 or kr < 0:
+            raise ValueError("Error!  Reaction rate cannot be negative")
+
         if kf == 0 and kr == 0:
             logging.warning("Both forward and reverse rates are set to zero")
 
@@ -85,8 +88,8 @@ class Reaction(object):
         self.stoich_r = stoich_r
         self.products = products
         self.stoich_p = stoich_p
-        self.kf = self._validate_rate(kf, expected_unit=self._expected_unit_from_order(stoich_r)) if kf is not None else 0
-        self.kr = self._validate_rate(kr, expected_unit=self._expected_unit_from_order(stoich_p)) if kr is not None else 0
+        self.kf = kf if kf is not None else 0
+        self.kr = kr if kr is not None else 0
 
         self.reactant_IDs = [s.ID for s in self.reactants]
         self.product_IDs = [s.ID for s in self.products]
