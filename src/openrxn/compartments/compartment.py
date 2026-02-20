@@ -105,7 +105,8 @@ class Compartment(object):
         return (
             f"Compartment(ID={self.ID!r}, "
             f"volume={vol_str}, pos={pos_str}, "
-            f"n_rxns={len(self.reactions)}, n_conns={len(self.connections)})"
+            f"n_rxns={len(self.reactions)}, n_connections={len(self.connections)}) \n" 
+            f"Reactions:{rxn_strings}"
         )
 
 class Compartment1D(Compartment):
