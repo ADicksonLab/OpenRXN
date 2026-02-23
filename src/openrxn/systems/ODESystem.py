@@ -20,8 +20,8 @@ class ODESystem(System):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args,**kwargs)
-        self.NA = 6.022e23
         
+        self.NA = 6.022e23
         self.dqdt = self._build_dqdt()
 
     def set_q(self,idxs,Q):
@@ -39,6 +39,7 @@ class ODESystem(System):
 
         mult_volume = False
         mult_na = False
+
         if hasattr(Q,'units'):
             if Q.units == unit.mol/unit.L:
                 mult_volume = True
@@ -98,12 +99,16 @@ class ODESystem(System):
         state : openrxn.systems.state.State object
         model : openrxn.model.FlatModel object
         """
+        state = self.state
+
         dqdt = []
-        for i in range(self.state.size):
+        for i in range(state.size):
             # collect source and sink terms for this species in this compartment
 
             c = self.model.compartments[self.state.compartment[i]]
-            s = self.state.species[i]
+            s = state.species[i]
+            vol = (self.NA*c.volume/unit.mol) if c.volume is not None else None
+            state_idx = state.index[c.ID]
 
             sources = []
             sources_reservoir = []
@@ -111,6 +116,7 @@ class ODESystem(System):
             
             # look through the reactions in this compartment for ones that
             # involve this species
+
             for r in c.reactions:
                 if s in r.reactant_IDs:
                     s_idx = r.reactant_IDs.index(s)
@@ -119,10 +125,10 @@ class ODESystem(System):
                         q_list = []
                         n_r = 0
                         for j,x in enumerate(r.reactants):
-                            q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
+                            q_list.extend([state_idx[x.ID]]*r.stoich_r[j])
                             n_r += r.stoich_r[j]
-                        if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
+                        if n_r - 1 > 0 and vol is not None:
+                            vol_fac = vol**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -132,15 +138,15 @@ class ODESystem(System):
                         q_list = []
                         n_p = 0
                         for j,x in enumerate(r.products):
-                            q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
+                            q_list.extend([state_idx[x.ID]]*r.stoich_p[j])
                             n_p += r.stoich_p[j]
-                        if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = (self.NA*c.volume/unit.mol)**(n_p-1)
+                        if n_p - 1 > 0 and vol is not None:
+                            vol_fac = vol**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
                         sources.append((rate, q_list, r.stoich_r[s_idx]))
-                    
+
                 if s in r.product_IDs:
                     s_idx = r.product_IDs.index(s)
                     if r.kf > 0:
@@ -148,10 +154,10 @@ class ODESystem(System):
                         q_list = []
                         n_r = 0
                         for j,x in enumerate(r.reactants):
-                            q_list += [self.state.index[c.ID][x.ID]]*r.stoich_r[j]
+                            q_list.extend([state_idx[x.ID]]*r.stoich_r[j])
                             n_r += r.stoich_r[j]
-                        if n_r - 1 > 0 and c.volume is not None:
-                            vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
+                        if n_r - 1 > 0 and vol is not None:
+                            vol_fac = vol**(n_r-1)
                             rate = r.kf/vol_fac
                         else:
                             rate = r.kf
@@ -162,10 +168,10 @@ class ODESystem(System):
                         q_list = []
                         n_p = 0
                         for j,x in enumerate(r.products):
-                            q_list += [self.state.index[c.ID][x.ID]]*r.stoich_p[j]
+                            q_list.extend([state_idx[x.ID]]*r.stoich_p[j])
                             n_p += r.stoich_p[j]
-                        if n_p - 1 > 0 and c.volume is not None:
-                            vol_fac = (self.NA*c.volume/unit.mol)**(n_p-1)
+                        if n_p - 1 > 0 and vol is not None:
+                            vol_fac = vol**(n_p-1)
                             rate = r.kr/vol_fac
                         else:
                             rate = r.kr
@@ -182,18 +188,18 @@ class ODESystem(System):
                         sinks.append((conn[1].species_rates[s][0], [i], 1))
 
                     # add "in" diffusion process
-                    if isinstance(self.model.compartments[other_lab],Reservoir):
+                    if isinstance(comp[other_lab],Reservoir):
                         sources_reservoir.append((conn[1].species_rates[s][1],
-                                        self.model.compartments[other_lab].conc_funcs[s],
+                                        comp[other_lab].conc_funcs[s],
                                         1))
                     else:
                         if isinstance(conn,DivByVConnection):
                             sources.append((conn[1].species_rates[s][1]/conn[0].volume,
-                                            [self.state.index[other_lab][s]],
+                                            [state.index[other_lab][s]],
                                             1))
                         else:
                             sources.append((conn[1].species_rates[s][1],
-                                            [self.state.index[other_lab][s]],
+                                            [state.index[other_lab][s]],
                                             1))
                     
             dqdt.append(DerivFuncBuilder(sources, sinks, sources_reservoir))
