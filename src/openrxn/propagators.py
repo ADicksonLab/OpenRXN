@@ -29,7 +29,8 @@ def Gillespie(processes,update_list,time_range,y0):
     Returns:
 
     y_final :    the final value of the state vector
-    t_final :    the actual final time
+    t_final :    the final time (time_range[1]; the next event
+                 would occur after it)
     """
 
     t = time_range[0]
@@ -49,10 +50,23 @@ def Gillespie(processes,update_list,time_range,y0):
     while t < time_range[1]:
         # keep track of processes that will need to be updated
         to_update = []
-        
+
+        # nothing can fire: the state is frozen until the end
+        rsum = r.sum()
+        if rsum <= 0:
+            t = time_range[1]
+            break
+
         # save 1/rsum since multiplication is faster
-        oorsum = 1/r.sum()
-        
+        oorsum = 1/rsum
+
+        # draw the waiting time first; stop at the end if it passes it
+        a = np.random.random()
+        t += -np.log(a)*oorsum
+        if t >= time_range[1]:
+            t = time_range[1]
+            break
+
         # choose a reaction to execute
         i = np.random.choice(range(n),p=r*oorsum)
 
@@ -60,10 +74,6 @@ def Gillespie(processes,update_list,time_range,y0):
         for idx, d in processes[i][2]:
             y[idx] += d
             to_update += update_list[idx]
-
-        # update t
-        a = np.random.random()
-        t += -np.log(a)*oorsum
 
         # update only the necessary r values
         for i in set(to_update):

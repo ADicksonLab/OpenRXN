@@ -72,7 +72,9 @@ class State(object):
             for rxn in c.reactions:
                 spec += rxn.reactant_IDs
                 spec += rxn.product_IDs
-            spec_set = set(spec)
+            # first-seen order (not a set), so the species order -- and every
+            # state index -- is the same in every Python process
+            spec_set = list(dict.fromkeys(spec))
 
             for i,s in enumerate(spec_set):
                 self.index[c_tag][s] = running_index + i
@@ -109,11 +111,11 @@ class State(object):
         if 'z_pos' in df.columns:
             self.z_pos = np.array(df['z_pos'])
 
-        # building self.index dictionary
+        # building self.index dictionary (positional rows, so any df index works)
         for i in range(len(df['species'])):
-            if df['compartment'][i] not in self.index:
-                self.index[df['compartment'][i]] = {}
-            self.index[df['compartment'][i]][df['species'][i]] = i
+            if df['compartment'].iloc[i] not in self.index:
+                self.index[df['compartment'].iloc[i]] = {}
+            self.index[df['compartment'].iloc[i]][df['species'].iloc[i]] = i
 
     def to_dataframe(self):
         df = pd.DataFrame()

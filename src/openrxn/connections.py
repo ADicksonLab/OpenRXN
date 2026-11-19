@@ -1,4 +1,5 @@
-"""Connections govern the transport between compartments.
+"""
+Connections govern the transport between compartments.
 In some cases the transport can be described by a first-order
 rate equation, e.g.:
 
@@ -15,81 +16,168 @@ and this is what is stored in the connection objects.
 """
 
 from . import unit
+import copy
+import logging
 
 class Connection(object):
     """Basis class for connections.  The argument species_rates
     is a dictionary, with Species IDs as keys and values hold 
-    rate constant tuples (k12,k21)."""
+    rate constant tuples (k12,k21).
+
+    A connection object describes one direction of a link: when
+    compartment 1 connects to compartment 2 with rates (k12,k21), the
+    link from 2 back to 1 must carry (k21,k12), i.e. self.reverse().
+    Using the same object for both directions conserves mass only when
+    k12 == k21 (see is_symmetric)."""
+
+    species_rates: dict   # set by subclasses that hold rate tuples
+
+    def reverse(self):
+        """Return the connection for the opposite direction of the link
+        (out/in rates swapped).  Connections without rate tuples
+        (unresolved FicksConnection/ResConnection) and connections with
+        equal rates both ways are their own reverse, so they are returned
+        unchanged."""
+        rates = getattr(self, 'species_rates', None)
+        if rates is None or self.is_symmetric():
+            return self
+        new = copy.copy(self)
+        new.species_rates = {s: (r[1], r[0]) for s, r in rates.items()}
+        return new
+
+    def is_symmetric(self):
+        """True when every species has the same rate in both directions,
+        so one object can serve both directions of a link."""
+        rates = getattr(self, 'species_rates', None)
+        if rates is None:
+            return True
+        return all(r[0] == r[1] for r in rates.values())
 
 class AnisotropicConnection(Connection):
     
     def __init__(self, species_rates,dim=3):
-        """AnisotropicConnections are initialized with a dictionary
-        of species_rates, where the keys are Species IDs and the 
-        values are tuples of transport rates (k_out,k_in).
+        """
+        Directional (anisotropic) transport connection between two compartments. 
 
-        Care should be taken to make sure these are applied in the
-        right direction!
+        Parameters
+        ----------
+        species_rates : dict
+            Dictionary of Species, where the keys are Species IDs and the 
+            values are tuples of transport rates (k_out,k_in).
+            k_out corresponds to transport from compartment 1 to 2.
+            k_in corresponds to transport from compartment 2 to 1.
 
-        Rates should be specified in units of 1/s.
+                - A tuple (k_out, k_in) specifies directional transport rates.
+                - A scalar quantity k is interpreted as symmetric transport
+                and internally turn into tuples of transport rates (k, k).
+                - All rates must be specified in units of 1/s.
+
+        dim : int, optional
+            Spatial dimension.
+
         """
         self.species_rates = species_rates
+        self.dim = dim
 
-        for s in self.species_rates:
-            if type(self.species_rates[s]) is not tuple or len(self.species_rates[s]) != 2:
-                raise ValueError("Error! Elements of species_rates dictionary should be tuples of length 2")
+        for s,r in self.species_rates.items():
+            if not isinstance(r,tuple):
+                logging.warning(f"Species {s}: one scalar rate provided. Assigning k_out == k_in.")
+                r = (r,r)
+                self.species_rates[s] = r
+
+            elif len(r) != 2:
+                raise ValueError(f"Species {s}: rate tuple must be length 2, got length {len(r)}.")
+
             self.species_rates[s][0].ito(1/unit.sec)
             self.species_rates[s][1].ito(1/unit.sec)
 
+    @staticmethod
     def _flip_tuple(t):
         return (t[1],t[0])
             
     def reverse(self):
         rev_species_rates = {}
-        for s in self.species_rates:
-            rev_species_rates[s] = self._flip_tuple(self.species_rates[s])
+        for s,r in self.species_rates.items():
+            rev_species_rates[s] = self._flip_tuple(r)
 
-        return AnisotropicConnection(rev_species_rates)
-            
+        return AnisotropicConnection(rev_species_rates,dim=self.dim)
+
+    def __repr__(self):
+        rates = {s: (k[0].magnitude, k[1].magnitude) for s, k in self.species_rates.items()}
+        # no species: no unit to show
+        unit_str = str(next(iter(self.species_rates.values()))[0].units) if self.species_rates else ""
+        return (f"AnisotropicConnection(dim={self.dim},"
+                f"n_species={len(self.species_rates)},"
+                f"transport_rates={rates}{unit_str})"
+                )
+
 class IsotropicConnection(Connection):
 
     def __init__(self, species_rates,dim=3):
-        """IsotropicConnections are initialized with a dictionary
-        of species_rates, where the keys are Species IDs and the 
-        values are transport rates.
+        """
+        Symmetric (isotropic) transport connection between two compartments. 
 
-        Rates should be specified in units of 1/s.
+        Parameters
+        ----------
+        species_rates : dict
+            Dictionary of Species, where the keys are Species IDs and the 
+            value is a transport rate constant (k).
+
+                - A scalar quantity k is interpreted as symmetric transport
+                and internally turn into tuples of transport rates (k, k).
+                - All rates must be convertible to units of 1/s.
+
+        dim : int, optional
+            Spatial dimension.
+
         """
         self.species_rates = species_rates
         self.dim = dim
 
-        for s in self.species_rates:
-            k = self.species_rates[s]
-            if type(k) is not tuple:
+        for s,k in self.species_rates.items():
+            if not isinstance(k,tuple):
                 self.species_rates[s] = (k,k)
+
             self.species_rates[s][0].ito(1/unit.sec)
             self.species_rates[s][1].ito(1/unit.sec)
+
+    def __repr__(self):
+        rates = {s: (k[0].magnitude, k[1].magnitude) for s, k in self.species_rates.items()}
+        # no species: no unit to show
+        unit_str = str(next(iter(self.species_rates.values()))[0].units) if self.species_rates else ""
+        return (f"IsotropicConnection(dim={self.dim},"
+                f"n_species={len(self.species_rates)},"
+                f"transport_rates={rates}{unit_str})"
+                )
 
 class DivByVConnection(Connection):
 
     def __init__(self, species_rates,dim=3):
-        """DivByVConnections are initialized with a dictionary
-        of species_rates, where the keys are Species IDs and the 
-        values are transport rates.
-
-        Rates should be specified in units of L^d/s, where L is length
-        and d is the compartment volume.
-
-        These connections are divided by the compartment volume
-        when constructing a system.
         """
+        Volume-based transport connection between two compartments. 
+        
+        This connection stores transport coefficients proportional to compartment volume. 
+        Rates should be specified in units of L^d/s, where L is length and d is the 
+        compartment volume. 
+
+        Parameters
+        ----------
+        species_rates : dict
+            Dictionary of Species, where the keys are Species IDs and the 
+            value is a transport rate constant (k).
+
+        dim : int, optional
+            Spatial dimension.
+
+        """
+
         self.species_rates = species_rates
         self.dim = dim
 
-        for s in self.species_rates:
-            k = self.species_rates[s]
-            if type(k) is not tuple:
-                self.species_rates[s] = (k,k)
+        for s,k in self.species_rates.items():
+            if not isinstance(k, tuple):
+                k = (k,k)
+                self.species_rates[s] = k
             self.species_rates[s][0].ito(unit.nm**self.dim/unit.sec)
             self.species_rates[s][1].ito(unit.nm**self.dim/unit.sec)
             
@@ -127,6 +215,19 @@ class FicksConnection(Connection):
 
         If either surface_area or ic_distance is left undefined, they will be
         automatically calculated using compartment positions.
+
+        Parameters
+        ----------
+        species_d_constants : dict
+            Dictionary of Species, where the keys are Species IDs and the 
+            value is a diffusion constant (D). (units convertible to L^2 / s).
+        surface_area : Quantity, optional
+            Interface area A between compartments (units convertible to L^(dim-1)).
+        ic_distance : Quantity, optional
+            Center-to-center distance DeltaX (units convertible to L).
+        dim : int, optional
+            Spatial dimension (default 3).
+
         """
 
         self.species_d_constants = species_d_constants
@@ -135,19 +236,17 @@ class FicksConnection(Connection):
         self.dim = dim
 
     def resolve(self):
-        """This returns an IsotropicConnection that does not 
+        """This returns a DivByVConnection that does not 
         require any information about the Species, or the arrays"""
 
         if self.surface_area is None or self.ic_distance is None:
-            raise ValueError("Error!  This connection is not ready to be resolved.")
-        species_list = self.species_d_constants.keys()
+            raise ValueError("Error! This connection is not ready to be resolved.")
+
         rates = {}
         for s,d in self.species_d_constants.items():
-
-            # how are you going to get this volume?
-            
-            rates[s] = d*self.surface_area/self.ic_distance
-            rates[s].ito(unit.nm**self.dim/unit.sec)
+            kV = d*self.surface_area/self.ic_distance
+            kV.ito(unit.nm**self.dim/unit.sec)
+            rates[s] = kV
             
         return DivByVConnection(rates,self.dim)
 
@@ -158,8 +257,22 @@ class ResConnection(Connection):
         ResConnections are special connections from a compartment to a 
         reservoir.  They are resolved similarly to a FicksConnection.
 
-        face is a string input, equal to either 'x', 'y' or 'z', 
-        denoting along which axis the ResConnection takes place.
+        Parameters
+        ----------
+        species_d_constants : dict
+            Dictionary of Species, where the keys are Species IDs and the 
+            value is a diffusion constant (D). (units convertible to L^2/s).
+        surface_area : Quantity, optional
+            Reservoir interface area A (units convertible to L^(dim-1)).
+        ic_distance : Quantity, optional
+            Distance DeltaX from compartment center to reservoir boundary (units convertible to L).
+            If omitted, Model.flatten uses half the compartment width along `face`
+            (the reservoir concentration is held at the shared face).
+        dim : int, optional
+            Spatial dimension.
+        face : str({'x','y','z'}) or None, optional
+            Axis normal to the reservoir interface.
+
         """
         
         self.species_d_constants = species_d_constants
@@ -169,15 +282,16 @@ class ResConnection(Connection):
         self.face = face
 
     def resolve(self):
-        """This returns an AnisotropicConnection that does not 
+        """This returns a DivByVConnection that does not 
         require any information about the Species, or the arrays"""
 
         if self.surface_area is None or self.ic_distance is None:
-            raise ValueError("Error!  This connection is not ready to be resolved.")
-        species_list = self.species_d_constants.keys()
+            raise ValueError("Error! This connection is not ready to be resolved.")
+
         rates = {}
         for s,d in self.species_d_constants.items():
-            rates[s] = d*self.surface_area/self.ic_distance
-            rates[s].ito(unit.nm**self.dim/unit.sec)
+            kV = d*self.surface_area/self.ic_distance
+            kV.ito(unit.nm**self.dim/unit.sec)
+            rates[s] = kV
             
         return DivByVConnection(rates,self.dim)

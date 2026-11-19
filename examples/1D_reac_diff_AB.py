@@ -44,7 +44,8 @@ D = Species('D')
 # M^-1 s^-1, or L^d / (s * mol), where L is units of length and
 # d is the dimensionality of the system (here, 1)
 
-conc = 1.0*unit.mol/h
+# conc is one molecule per compartment, so k1 and k2 are Erban's per-pair rates
+conc = 1.0*unit.mol/(6.022e23*h)
 k1 = 1e-3/unit.sec/conc
 k2 = 1e-2/unit.sec/conc
 k3 = 1.2/unit.sec

@@ -71,6 +71,11 @@ class System(object):
         Note:  this function assumes that the initial state vector (q_val)
         has already been set, and that reporters have already been 
         defined and attached to the system.
+
+        Every reporter records the initial state at t = 0 and then every
+        r.freq.  With reporters the run is split into segments at the
+        report times; the returned result covers the whole run from 0 to
+        total_time (see self._combine_results).
         """
 
         report_freqs = [r.freq for r in self.reporters]
@@ -78,30 +83,50 @@ class System(object):
         # add endpoints as default, even if reporters aren't present
         checkpoints = [0,total_time]
         for freq in report_freqs:
-            n = int(total_time/freq) + 1
+            n = int(total_time/freq + EPSILON) + 1
             checkpoints += [freq*i for i in range(n)]
 
         checkpoints = list(set(checkpoints))
         checkpoints.sort()
-        
+
+        if report_freqs:
+            # merge checkpoints that differ only by round-off, keeping 0 and total_time exact
+            tol = EPSILON*min(report_freqs)
+            merged = [0]
+            for c in checkpoints:
+                if tol < c - merged[-1] and c < total_time - tol:
+                    merged.append(c)
+            checkpoints = merged + [total_time]
+
+        for r in self.reporters:
+            r.report(checkpoints[0], self.state.q_val.copy())
+
+        segments = []
         for i in range(len(checkpoints)-1):
             init_t = checkpoints[i]
             final_t = checkpoints[i+1]
             
             result = self.propagate((init_t,final_t),**kwargs)
+            segments.append(result)
             if 'final_t' in result:
                 checkpoints[i+1] = result['final_t']
 
             logging.info("Reached checkpoint: t = {0}".format(checkpoints[i+1]))
             
             for r in self.reporters:
-                # check whether final_t is a multiple of r.freq
-                if final_t/r.freq - int(final_t/r.freq) < EPSILON:
-                    r.report(checkpoints[i+1], self.state.q_val)
+                # check whether final_t is a multiple of r.freq (up to round-off)
+                if abs(final_t/r.freq - round(final_t/r.freq)) < EPSILON:
+                    r.report(checkpoints[i+1], self.state.q_val.copy())
 
-        return result
+        return self._combine_results(segments)
+
+    def _combine_results(self, segments):
+        """Merge the per-segment results of run() into one result.
+        The base class returns the last segment (it holds the final state);
+        ODESystem joins the trajectories."""
+        return segments[-1]
         
-    def propagate(self,**kwargs):
+    def propagate(self,t_interval,**kwargs):
         raise NotImplementedError
         
         

@@ -32,6 +32,8 @@ class GillespieSystem(System):
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args,**kwargs)
+        # same Avogadro constant as ODESystem
+        self.NA = 6.022e23
         self.processes, self.process_update_list = self._build_processes()
 
     def propagate(self,t_interval,**kwargs):
@@ -75,8 +77,11 @@ class GillespieSystem(System):
         for c in self.model.compartments.values():
             # first add reactions 
             for r in c.reactions:
+                if r.vicinity is not None:
+                    raise NotImplementedError("Vicinity (rebinding) reactions are not implemented for GillespieSystem; "
+                                              "use ODESystem, or an explicit vicinity compartment")
                 # add forward reaction (losing reactants, gaining products)
-                
+
                 if r.kf > 0:
                     # qlist: quantities that must be multiplied together to
                     # get the reaction flux
@@ -89,7 +94,8 @@ class GillespieSystem(System):
                         delta_list.append((self.state.index[c.ID][x.ID],-r.stoich_r[j]))
                         n_r += r.stoich_r[j]
                     if c.volume is not None and n_r - 1 > 0:
-                        vol_fac = (c.volume/unit.mol)**(n_r-1)
+                        # molar rate -> per-molecule rate: divide by (NA*V)^(n-1)
+                        vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
 
                     for j,x in enumerate(r.products):
                         delta_list.append((self.state.index[c.ID][x.ID],r.stoich_p[j]))
@@ -110,31 +116,28 @@ class GillespieSystem(System):
                         q_list.append((self.state.index[c.ID][x.ID],r.stoich_p[j]))
                         n_r += r.stoich_p[j]
                     if c.volume is not None and n_r - 1 > 0:
-                        vol_fac = (c.volume/unit.mol)**(n_r-1)
+                        vol_fac = (self.NA*c.volume/unit.mol)**(n_r-1)
 
                     processes.append((self._cast_rate(r.kr/vol_fac),q_list,delta_list))
 
             # then, add diffusion processes
             for other_lab, conn in c.connections.items():
-                for s in conn[1].species_rates.keys():
+                # conn is a tuple: (neighbor_compartment, connection_object)
+                neighbor, connection = conn
+                if isinstance(neighbor, Reservoir):
+                    processes += self._reservoir_processes(c, neighbor, connection)
+                    continue
+                for s in connection.species_rates.keys():
                     # add "out" diffusion process
                     # Note: volumes must be defined if diffusion processes are occurring
-                    #
-                    if isinstance(conn,DivByVConnection):
-                        processes.append((self._cast_rate(conn[1].species_rates[s][0]/c.volume),
+                    if isinstance(connection,DivByVConnection):
+                        processes.append((self._cast_rate(connection.species_rates[s][0]/c.volume),
                                           [(self.state.index[c.ID][s],1)],
                                           [(self.state.index[c.ID][s],-1), (self.state.index[other_lab][s],1)]))
                     else:
-                        processes.append((self._cast_rate(conn[1].species_rates[s][0]),
+                        processes.append((self._cast_rate(connection.species_rates[s][0]),
                                           [(self.state.index[c.ID][s],1)],
                                           [(self.state.index[c.ID][s],-1), (self.state.index[other_lab][s],1)]))
-                        
-
-#                    if isinstance(conn[0],Reservoir):
-#                        processes.append((self._cast_rate(conn[1].species_rates[s][0]/c.volume),
-#                                          [(self.state.index[c.ID][s],1)],
-#                                          [(self.state.index[c.ID][s],-1), (self.state.index[other_lab][s],1)]))
-                        
 
             process_update_list = [[] for idx in range(self.state.size)]
             for i,p in enumerate(processes):
@@ -142,6 +145,32 @@ class GillespieSystem(System):
                     process_update_list[ID].append(i)
                                      
         return processes, process_update_list
+
+    def _reservoir_processes(self, c, res, connection):
+        """Processes for a link from compartment c to a Reservoir.
+
+        Out: each molecule in c leaves at k_out/V (it is absorbed by the
+        reservoir, whose concentration does not change).
+        In:  zero-order birth in c at k_in * C_res molecules/s, the same
+        source term ODESystem uses.  Only constant reservoir concentrations
+        (Reservoir(concs=...)) are supported; a time-varying conc_func would
+        need a time-dependent propensity."""
+        if not isinstance(connection, DivByVConnection):
+            raise ValueError("Error! Links to a Reservoir must be ResConnections (resolved to "
+                             "DivByVConnection) for GillespieSystem, as for ODESystem; got {0}".format(type(connection).__name__))
+        procs = []
+        for s, (k_out, k_in) in connection.species_rates.items():
+            i = self.state.index[c.ID][s]
+            procs.append((self._cast_rate(k_out/c.volume), [(i,1)], [(i,-1)]))
+            if s not in res.const_concs:
+                if s in res.conc_funcs:
+                    raise NotImplementedError("Reservoir {0}: time-varying concentration of {1} is not supported "
+                                              "by GillespieSystem; use Reservoir(concs=...) for a constant "
+                                              "concentration, or ODESystem".format(res.ID, s))
+                raise ValueError("Reservoir {0} has no concentration for species {1}".format(res.ID, s))
+            rate_in = k_in.to(unit.nm**3/unit.sec).magnitude*res.const_concs[s]   # molecules/s
+            procs.append((rate_in, [], [(i,1)]))
+        return procs
 
     def set_q(self,idxs,Q):
         """Set the state.q_val array at the specified indexes

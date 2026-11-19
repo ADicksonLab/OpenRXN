@@ -24,7 +24,7 @@ class Reporter(object):
         to system.results.  current_state_vec is the state vector 
         of the system."""
 
-        return NotImplementedError
+        raise NotImplementedError
 
     def reports(self):
         """Return the list of reports that have been collected."""
@@ -134,5 +134,5 @@ class MinReporter(Reporter):
     def report(self,current_time,current_state_vec):
         tmp = current_state_vec[self.selection_idxs]
         self._reports.append({'t': current_time,
-                              'report': (np.max(tmp),np.argmax(tmp))})
+                              'report': (np.min(tmp),np.argmin(tmp))})
 

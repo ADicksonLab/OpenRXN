@@ -14,7 +14,7 @@ setup(
     author_email="alexrd@msu.edu",
     description="OpenRXN",
     license="MIT",
-    url="https://gitlab.com/ADicksonLab/OpenRXN.git",
+    url="https://github.com/ADicksonLab/OpenRXN",
     classifiers=[
         "Topic :: Utilities",
         "License :: OSI Approved :: MIT License",

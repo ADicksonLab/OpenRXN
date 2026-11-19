@@ -4,11 +4,13 @@ reactions one at a time, or a new model can be defined
 using a template, and then edited.
 """
 
-from openrxn.compartments.compartment import Compartment
+from openrxn.compartments.compartment import Compartment, Reservoir
 from openrxn.reactions import Reaction
-from openrxn.compartments.ID import makeID
+from openrxn.compartments.ID import make_ID
 from openrxn.connections import FicksConnection, ResConnection
 
+import copy
+import logging
 import numpy as np
 import networkx as nx
 
@@ -45,7 +47,8 @@ class Model(object):
                 raise ValueError("Error! Adding array with incompatible periodicity to model ({0}) ({1})".format(self.periodic,array.periodic))
 
         if self.box_len is None:
-            self.box_len = array.box_len
+            # copy, so stacking later arrays does not modify this array's box_len
+            self.box_len = list(array.box_len)
         else:
             for i in range(len(array.box_len)):
                 # loop over dimensions
@@ -94,7 +97,45 @@ class Model(object):
                 elif isinstance(conn[1],FicksConnection):
                     self.resolve_ficks(c,conn[0],conn[1])
 
+        self.check_link_consistency(flatmodel)
+
         return flatmodel
+
+    @staticmethod
+    def check_link_consistency(flatmodel):
+        """Warn about links whose two directions do not match.
+
+        A link A -> B with rates (k_out, k_in) conserves mass only if the
+        link B -> A carries (k_in, k_out).  Links to a Reservoir are one-way
+        by design and are skipped.  Returns the list of offending
+        (compartment, neighbor) pairs."""
+        bad = []
+        for c in flatmodel.compartments.values():
+            if isinstance(c, Reservoir):
+                continue
+            for label, (n, conn) in c.connections.items():
+                if isinstance(n, Reservoir) or not hasattr(conn, 'species_rates'):
+                    continue
+                other = flatmodel.compartments.get(label)
+                back = other.connections.get(c.ID) if other is not None else None
+                if back is None or not hasattr(back[1], 'species_rates'):
+                    bad.append((c.ID, label))
+                    continue
+                for sp, (k_out, k_in) in conn.species_rates.items():
+                    r = back[1].species_rates.get(sp)
+                    try:
+                        same = (r is not None and
+                                np.isclose(k_out.to(r[1].units).magnitude, r[1].magnitude, rtol=1e-9, atol=0) and
+                                np.isclose(k_in.to(r[0].units).magnitude, r[0].magnitude, rtol=1e-9, atol=0))
+                    except Exception:
+                        same = False
+                    if not same:
+                        bad.append((c.ID, label))
+                        break
+        if bad:
+            logging.warning("{0} link(s) do not mirror their reverse link (A->B rates (k_out,k_in) need B->A "
+                            "rates (k_in,k_out)), so mass is not conserved. First few: {1}".format(len(bad), bad[:5]))
+        return bad
 
     def resolve_ficks(self,c1,c2,conn):
         """If surface area and inter-compartment distance are not attached
@@ -105,22 +146,26 @@ class Model(object):
         that are fully adjoining on one face.
 
         This function then calls the resolve method of the FicksConnection and
-        returns the corresponding IsotropicConnection."""
+        connects both compartments with the resulting DivByVConnection."""
 
+        # resolve a copy: one FicksConnection is often shared by many pairs
+        conn = copy.copy(conn)
         pos1 = c1.pos
         pos2 = c2.pos
+        periodic = self.periodic if self.periodic is not None else [False]*3
 
         if conn.surface_area is None:
             # compute surface area
-            if pos1[0][1] == pos2[0][0] or pos1[0][0] == pos2[0][1]:
+            axis = self._adjoining_axis(pos1,pos2,periodic)
+            if axis == 0:
                 # adjoining x; use y,z face area
                 conn.surface_area = min(c1.surface_area['yz'],
                                         c2.surface_area['yz'])
-            elif pos1[1][1] == pos2[1][0] or pos1[1][0] == pos2[1][1]:
+            elif axis == 1:
                 # adjoining y; use x,z face area
                 conn.surface_area = min(c1.surface_area['xz'],
                                         c2.surface_area['xz'])
-            elif pos1[2][1] == pos2[2][0] or pos1[2][0] == pos2[2][1]:
+            elif axis == 2:
                 # adjoining z; use x,y face area
                 conn.surface_area = min(c1.surface_area['xy'],
                                         c2.surface_area['xy'])
@@ -136,18 +181,40 @@ class Model(object):
             # get inter-compartmental distance
             conn.ic_distance = 0
             for i,dc in enumerate(d):
-                if self.periodic[i]:
+                if periodic[i]:
                     if dc*2 < -self.box_len[i]:
                         dc += self.box_len[i]
                     elif dc*2 > self.box_len[i]:
                         dc -= self.box_len[i]
                 conn.ic_distance += dc**2
             conn.ic_distance = np.sqrt(conn.ic_distance)
+            if conn.ic_distance == 0:
+                # linked to itself across a periodic boundary (one cell wide): image is one box length away
+                axis = self._adjoining_axis(pos1,pos2,periodic)
+                if axis is None:
+                    raise ValueError("Error! Compartments at the same position cannot be connected: ({0})".format(pos1))
+                conn.ic_distance = self.box_len[axis]
 
         new_conn = conn.resolve()
         # Note: Fick's connections are isotropic
         c1.connect(c2,new_conn,warn_overwrite=False)
         c2.connect(c1,new_conn,warn_overwrite=False)
+
+    def _adjoining_axis(self,pos1,pos2,periodic):
+        """Returns the axis (0, 1 or 2) along which two regions share a face,
+        or None.  Direct contact is checked first, then contact across a
+        periodic boundary."""
+
+        for i in range(3):
+            if pos1[i][1] == pos2[i][0] or pos1[i][0] == pos2[i][1]:
+                return i
+        for i in range(3):
+            if periodic[i]:
+                gaps = [(pos1[i][1]-pos2[i][0])/self.box_len[i],
+                        (pos2[i][1]-pos1[i][0])/self.box_len[i]]
+                if any(np.isclose(float(g),1.0) for g in gaps):
+                    return i
+        return None
 
     def resolve_res(self,c1,res,conn):
         """If surface area and inter-compartment distance are not attached
@@ -160,6 +227,8 @@ class Model(object):
         This function then calls the resolve method of the ResConnection and
         returns the corresponding DivByVConnection."""
 
+        # resolve a copy: one ResConnection may be shared by many compartments
+        conn = copy.copy(conn)
         if conn.surface_area is None:
             if conn.face in ['x','y','z']:
                 if conn.face == 'x':
@@ -172,13 +241,15 @@ class Model(object):
                 raise ValueError("Error! To resolve the ResConnection, we need to know the surface area of the interface.")
 
         if conn.ic_distance is None:
+            # the reservoir concentration is held at the shared face, so the
+            # distance is from the compartment center to that face: half the width
             if conn.face in ['x','y','z']:
                 if conn.face == 'x':
-                    conn.ic_distance = c1.pos[0][1] - c1.pos[0][0]
+                    conn.ic_distance = 0.5*(c1.pos[0][1] - c1.pos[0][0])
                 elif conn.face == 'y':
-                    conn.ic_distance = c1.pos[1][1] - c1.pos[1][0]
+                    conn.ic_distance = 0.5*(c1.pos[1][1] - c1.pos[1][0])
                 elif conn.face == 'z':
-                    conn.ic_distance = c1.pos[2][1] - c1.pos[2][0]
+                    conn.ic_distance = 0.5*(c1.pos[2][1] - c1.pos[2][0])
             else:
                 raise ValueError("Error! To resolve the ResConnection, we need to know the intercompartmental distance.")
 
@@ -205,7 +276,7 @@ class FlatModel(object):
         return len(self.compartments)
         
     def add_compartment(self,compartment):
-        newID = makeID(compartment.array_ID,compartment.ID)
+        newID = make_ID(compartment.array_ID,compartment.ID)
         if newID in self.compartments.keys():
             raise ValueError("Error! Duplicate compartment ID in model ({0})".format(newID))
         self.compartments[newID] = compartment.copy(ID=newID,delete_array_ID=True)
@@ -251,14 +322,14 @@ class FlatModel(object):
         # add all the nodes
         for c_name, c in self.compartments.items():
             graph.add_node(c_name)
-            graph.node[c_name]['viz'] = {}
+            graph.nodes[c_name]['viz'] = {}
 
-            x = scale*0.5*(c.pos[0][0] + c.pos[0][1]).magnitude
-            y = scale*0.5*(c.pos[1][0] + c.pos[1][1]).magnitude
-            z = scale*0.5*(c.pos[2][0] + c.pos[2][1]).magnitude
+            # centre per dimension; missing dimensions (1D/2D, reservoirs, no pos) are placed at 0
+            centre = [scale*0.5*(lo + hi).magnitude for lo,hi in c.pos]
+            x,y,z = centre + [0.0]*(3-len(centre))
             vis_x,vis_y = self._project_xy((x,y,z))
             
-            graph.node[c_name]['viz']['position'] = {'x': float(vis_x), 'y': float(vis_y)}
+            graph.nodes[c_name]['viz']['position'] = {'x': float(vis_x), 'y': float(vis_y)}
 
         # build an edges list
         edges = []

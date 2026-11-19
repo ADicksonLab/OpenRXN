@@ -18,57 +18,160 @@ kf = 0/unit.sec
 r1 = Reaction('combustion',[m,o2],[co2,w],[1,2],[1,2],kf=kf,kr=kr)
 """
 
+from openrxn import unit
 import logging
 
 class Species(object):
-    """Species can be either reactants or products and can
-    interconvert through Reactions. Each species object must 
-    be given a unique name."""
+    """
+    Species object models an individual chemical entity (reactants or product) that can participate and interconvert
+    through Reactions. Each species object must be given a unique name ('ID').
 
-    def __init__(self, ID, **kwargs):
-        
-        self.ID = ID
-        for key, value in kwargs.items():
-            self.key = value
-
-class Reaction(object):
-    """A reaction describes how reactants and products are 
-    related
+    Parameters
+    ----------
+    ID : str
+        Unique identifier for the species.
+    **kwargs : dict, optional
+        Arbitrary key-value pairs defining additional species properties.
     """
 
-    def __init__(self, ID, reactants, products, stoich_r, stoich_p, kf=0, kr=0):
+    def __init__(self, ID, **kwargs):
         self.ID = ID
 
-        for r in reactants:
-            assert isinstance(r,Species), "Error! Reactants must be Species objects"
-        
-        self.reactants = reactants
-        assert len(reactants) == len(stoich_r), "Error! Stoichiometry list for reactants must have same length as reactants list"
-        self.stoich_r = stoich_r
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
-        for p in products:
-            assert isinstance(p,Species), "Error! Products must be Species objects"
+    def __repr__(self):
+        return f"Species({self.ID})"
+
+class Vicinity(object):
+    """
+    Quasi-steady-state vicinity of a target, for ligand rebinding (Vauquelin 2016,
+    Table 1 eq. 7). Ligand released into the vicinity by a tagged reaction escapes
+    to the bulk at k_drift or is recaptured by a tagged reaction that consumes it.
+    Tag one reaction for its own vicinity, or several reactions with the same
+    Vicinity to share one (cross-capture). Supported by ODESystem only.
+
+    Parameters
+    ----------
+    ID : str
+        Unique identifier for the vicinity.
+    ligand : Species
+        Species that is released into and recaptured from the vicinity.
+    k_drift : Quantity
+        Escape rate from the vicinity to the bulk (1/s).
+    """
+
+    def __init__(self, ID, ligand, k_drift):
+        if not isinstance(ligand, Species):
+            raise TypeError("Vicinity ligand must be a Species object")
+        if k_drift <= 0:
+            raise ValueError("Error!  k_drift must be positive")
+        self.ID = ID
+        self.ligand = ligand
+        self.k_drift = k_drift
+
+    def __repr__(self):
+        return f"Vicinity({self.ID})"
         
-        self.products = products
-        assert len(products) == len(stoich_p), "Error! Stoichiometry list for products must have same length as products list"
-        self.stoich_p = stoich_p
+class Reaction(object):
+    """
+    A reaction describes how reactants and products are related.
+
+    Parameters
+    ----------
+    ID: str
+        Unique identifier for the species.
+    reactants: set of Species
+        Reactant Species objects participate in the reaction
+    products: set of Species
+        Products Species objects participate in the reaction
+    stoich_r: int
+        Stoichiometric coefficients for reactants. Must be positive integers
+    stoich_p: int
+        Stoichiometric coefficients for products. Must be positive integers
+    kf: float, optional
+        Forward rate constant. 
+    kr: float, optional
+        Reverse rate constant.
+    vicinity: Vicinity, optional
+        Rebinding vicinity of this reaction. Its ligand must appear once, with
+        stoichiometry 1, on one side of the reaction.
+    """
+
+    def __init__(self, ID, reactants, products, stoich_r, stoich_p, kf=0, kr=0, vicinity=None):
+        self.ID = ID
+
+        if len(reactants) != len(stoich_r):
+            raise ValueError("Stoichiometry list for reactants must have same length as reactants list")
+        if len(products) != len(stoich_p):
+            raise ValueError("Stoichiometry list for products must have same length as products list")
+
+        if not all(isinstance(r, Species) for r in reactants):
+            raise TypeError("Reactants must be Species objects")
+        if not all(isinstance(p, Species) for p in products):
+            raise TypeError("Products must be Species objects")
 
         if kf < 0 or kr < 0:
             raise ValueError("Error!  Reaction rate cannot be negative")
-            
-        if kf == 0 and kr == 0:
-            logging.warn("Warning: Both forward and reverse rates are set to zero")
 
+        if kf == 0 and kr == 0:
+            logging.warning("Both forward and reverse rates are set to zero")
+
+        self.reactants = reactants
+        self.stoich_r = stoich_r
+        self.products = products
+        self.stoich_p = stoich_p
         self.kf = kf
-        self.kr = kr
+        self.kr = kr 
 
         self.reactant_IDs = [s.ID for s in self.reactants]
         self.product_IDs = [s.ID for s in self.products]
 
-        # todo: assure that the units on the rates are correct
+        if vicinity is not None:
+            lig = vicinity.ligand.ID
+            n_lig = [n for s, n in zip(self.reactant_IDs, stoich_r) if s == lig] + \
+                    [n for s, n in zip(self.product_IDs, stoich_p) if s == lig]
+            if n_lig != [1]:
+                raise ValueError("Vicinity ligand must appear once, with stoichiometry 1, on one side of the reaction")
+        self.vicinity = vicinity
+
+    def _expected_unit_from_order(self, stoich):
+
+        order = float(sum(stoich))
+        power = 1.0 - order
+
+        molar_factor = 1 if abs(power) < 1e-12 else (unit.molar ** power)
+        return molar_factor / unit.second
+    
+    def _validate_rate(self, rate, expected_unit):
+        """
+        Assure that the units on the rates are correct.
+        """
+
+        if isinstance(rate, (int,float)):
+            q = rate * expected_unit
+            logging.warning(f"Reaction rate provided without units. Assigning {expected_unit}. ")
+        else:
+            q = unit.Quantity(rate)
+
+        if q.magnitude < 0: 
+            raise ValueError(f"Reaction rate cannot be negative!")
+            
+        if q.dimensionality != expected_unit.dimensionality:
+            raise ValueError(f"Reaction rate has wrong units: {q.units}. "
+                            f"Expected unit: {expected_unit}")
+            
+        return q.to(expected_unit)
+
+    def __repr__(self):
+        rxn_list = self.display()
+        return f"Reaction({rxn_list})"
 
     def display(self):
-        """Returns a print string summarizing the reaction."""
+        """
+        Returns a string summarizing the reaction.
+        """
+
         to_print = ""
         rate_str = ""
         
@@ -98,6 +201,6 @@ class Reaction(object):
             else:
                 to_print += "{0} ".format(p.ID)
 
-        return(to_print + rate_str)
+        return (to_print + rate_str)
 
-        
+

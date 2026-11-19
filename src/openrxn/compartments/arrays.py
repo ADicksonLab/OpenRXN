@@ -1,15 +1,37 @@
 """Compartment arrays are groups of compartments that make
 it easier to connect and manipulate large groups."""
 
+import networkx as nx
+
 from openrxn.connections import Connection
 from openrxn.compartments.compartment import Compartment1D, Compartment2D, Compartment3D
+from openrxn.compartments.ID import make_ID
 
 class CompartmentArray(object):
     """Base class for compartment arrays."""
 
+    compartments: dict   # set by the 1D/2D/3D subclasses
+    array_ID: str
+
     def to_graph(self):
-        """Returns a graph, with compartments as nodes and
-        connections as edges."""
+        """Returns a networkx.DiGraph, with compartments as nodes and
+        connections as edges, labelled by '{array_ID}-{compartment_ID}'
+        tags as in a FlatModel.  Edges carry the k_out magnitude of each
+        species (when the connection has species_rates).  Links to other
+        arrays are kept, which adds those compartments as nodes."""
+
+        graph = nx.DiGraph()
+        edges = []
+        for c in self.compartments.values():
+            c_name = make_ID(c.array_ID, c.ID)
+            graph.add_node(c_name)
+            for e_name, conn in c.connections.items():
+                # unresolved FicksConnections have no species_rates yet
+                rates = getattr(conn[1], 'species_rates', {})
+                edges.append((c_name, e_name, {s: tup[0].magnitude for s, tup in rates.items()}))
+        graph.add_edges_from(edges)
+
+        return graph
 
     def add_rxn_to_array(self, rxn):
         """Adds a reaction to each compartment in the array."""
@@ -21,6 +43,15 @@ class CompartmentArray(object):
         for r in rxns:
             self.add_rxn_to_array(r)
 
+    @staticmethod
+    def _check_intra(conn_type):
+        """A link inside an array has no defined direction, so it must have
+        equal rates both ways (one object serves both directions)."""
+        if not conn_type.is_symmetric():
+            raise ValueError("Error! Connections inside an array must have equal rates in both "
+                             "directions; use IsotropicConnection/FicksConnection inside arrays and "
+                             "join two arrays (stack/join3D) for direction-dependent transport.")
+
     def change_all_intra_connection_type(self, new_ctype):
         """Change the connection type between the compartments,
         overwriting them with new_ctype, which must be a Connection 
@@ -29,6 +60,7 @@ class CompartmentArray(object):
         This only affects connections within the array,
         not connections between arrays."""
 
+        self._check_intra(new_ctype)
         for c in self.compartments.values():
             for n,c_type in c.connections.values():
 
@@ -41,15 +73,20 @@ class CompartmentArray(object):
         array and those in "other_array", overwriting them with 
         new_ctype, which must be a Connection type. 
 
+        Existing links are updated in both directions: self -> other_array
+        uses new_ctype and other_array -> self uses new_ctype.reverse(),
+        so (k_out, k_in) means k_out from this array into other_array.
+
         This only affects connections between the arrays,
         not connections within arrays."""
 
-        for c in self.compartments.values():
-            for n,c_type in c.connections.values():
+        for arr, other, ctype in ((self, other_array, new_ctype), (other_array, self, new_ctype.reverse())):
+            for c in arr.compartments.values():
+                for n,c_type in list(c.connections.values()):
 
-                # check if other compartment is in other_array
-                if n.array_ID == other_array.array_ID:
-                    c.connect(n,new_ctype,warn_overwrite=False)    
+                    # check if other compartment is in the opposite array
+                    if n.array_ID == other.array_ID:
+                        c.connect(n,ctype,warn_overwrite=False)
 
                     
 class CompartmentArray1D(CompartmentArray):
@@ -61,16 +98,23 @@ class CompartmentArray1D(CompartmentArray):
     the positions list includes the endpoints, so the number 
     of compartments is equal to len(positions) - 1
 
-    conn_type is the Connection to be used to connect the 
-    compartments in the array."""
+    conn_type is the Connection to be used to connect the
+    compartments in the array.
+
+    periodic is a bool (or a one-element list); it is stored as
+    a one-element list, like the 2D and 3D arrays."""
 
     def __init__(self, array_ID, positions, conn_type, periodic=False):
 
         self.array_ID = array_ID
         self.box_len = [positions[-1]-positions[0]]
-        self.periodic = periodic
-        
+        # a list, so Model.add_array can index it per dimension
+        if isinstance(periodic, (list, tuple)):
+            periodic = periodic[0]
+        self.periodic = [bool(periodic)]
+
         assert isinstance(conn_type,Connection), "conn_type must be of type Connection"
+        self._check_intra(conn_type)
 
         # set number of compartments
         self.n_compartments = len(positions)-1
@@ -86,7 +130,7 @@ class CompartmentArray1D(CompartmentArray):
                 self.compartments[(i)].connect(self.compartments[(i-1)],conn_type)
             if i < self.n_compartments-1:
                 self.compartments[(i)].connect(self.compartments[(i+1)],conn_type)
-        if periodic:
+        if self.periodic[0]:
             self.compartments[(0)].connect(self.compartments[(self.n_compartments-1)],conn_type)
             self.compartments[(self.n_compartments-1)].connect(self.compartments[(0)],conn_type)
 
@@ -103,10 +147,12 @@ class CompartmentArray1D(CompartmentArray):
 
         assert isinstance(conn_type, Connection), "conn_type must be of type Connection"
 
-        # add connections between compartments
+        # add connections between compartments; the link back uses the
+        # reversed rates, so (k_out, k_in) means k_out from self into other_array
+        back = conn_type.reverse()
         for i in range(self.n_compartments):
             self.compartments[(i)].connect(other_array.compartments[(i)],conn_type)
-            other_array.compartments[(i)].connect(self.compartments[(i)],conn_type)
+            other_array.compartments[(i)].connect(self.compartments[(i)],back)
 
 class CompartmentArray2D(CompartmentArray):
     """Uses a 2D array of compartments, which are connected
@@ -133,6 +179,7 @@ class CompartmentArray2D(CompartmentArray):
         self.array_ID = array_ID
         
         assert isinstance(conn_type, Connection), "conn_type must be of type Connection"
+        self._check_intra(conn_type)
 
         # set number of compartments
         self.nx = len(x_pos)-1
@@ -145,9 +192,9 @@ class CompartmentArray2D(CompartmentArray):
 
         # initialize compartment dictionary
         self.compartments = {}
-        for i in range(self.nx-1):
+        for i in range(self.nx):
             posx = (x_pos[i],x_pos[i+1])
-            for j in range(self.ny-1):
+            for j in range(self.ny):
                 posy = (y_pos[j],y_pos[j+1])
                 self.compartments[(i,j)] = Compartment2D((i,j), pos=[posx,posy], array_ID=self.array_ID)
 
@@ -192,11 +239,13 @@ class CompartmentArray2D(CompartmentArray):
         
         assert isinstance(conn_type, Connection), "conn_type must be of type Connection"
 
-        # add connections between compartments
+        # add connections between compartments; the link back uses the
+        # reversed rates, so (k_out, k_in) means k_out from self into other_array
+        back = conn_type.reverse()
         for i in range(self.nx):
             for j in range(self.ny):
                 self.compartments[(i,j)].connect(other_array.compartments[(i,j)],conn_type)
-                other_array.compartments[(i,j)].connect(self.compartments[(i,j)],conn_type)
+                other_array.compartments[(i,j)].connect(self.compartments[(i,j)],back)
         
 class CompartmentArray3D(CompartmentArray):
     """Uses a 3D array of cubic compartments, which are connected
@@ -227,6 +276,7 @@ class CompartmentArray3D(CompartmentArray):
         self.array_ID = array_ID
         
         assert isinstance(conn_type, Connection), "conn_type must be of type Connection"
+        self._check_intra(conn_type)
 
         # set number of compartments
         self.nx = len(x_pos)-1
@@ -332,7 +382,9 @@ class CompartmentArray3D(CompartmentArray):
 
         assert isinstance(conn_type, Connection), "conn_type must be of type Connection"
 
-        # add connections between compartments
+        # add connections between compartments; the link back uses the
+        # reversed rates, so (k_out, k_in) means k_out from self into other_array
+        back = conn_type.reverse()
         if append_side[0] == 'x':
             if append_side[1] == '-':
                 xind1 = 0
@@ -343,7 +395,7 @@ class CompartmentArray3D(CompartmentArray):
             for j in range(self.ny):
                 for k in range(self.nz):
                     self.compartments[(xind1,j,k)].connect(other_array.compartments[(xind2,j,k)],conn_type)
-                    other_array.compartments[(xind2,j,k)].connect(self.compartments[(xind1,j,k)],conn_type)
+                    other_array.compartments[(xind2,j,k)].connect(self.compartments[(xind1,j,k)],back)
         elif append_side[0] == 'y':
             if append_side[1] == '-':
                 yind1 = 0
@@ -354,7 +406,7 @@ class CompartmentArray3D(CompartmentArray):
             for i in range(self.nx):
                 for k in range(self.nz):
                     self.compartments[(i,yind1,k)].connect(other_array.compartments[(i,yind2,k)],conn_type)
-                    other_array.compartments[(i,yind2,k)].connect(self.compartments[(i,yind1,k)],conn_type)
+                    other_array.compartments[(i,yind2,k)].connect(self.compartments[(i,yind1,k)],back)
         elif append_side[0] == 'z':
             if append_side[1] == '-':
                 zind1 = 0
@@ -365,7 +417,7 @@ class CompartmentArray3D(CompartmentArray):
             for i in range(self.nx):
                 for j in range(self.ny):
                     self.compartments[(i,j,zind1)].connect(other_array.compartments[(i,j,zind2)],conn_type)
-                    other_array.compartments[(i,j,zind2)].connect(self.compartments[(i,j,zind1)],conn_type)
+                    other_array.compartments[(i,j,zind2)].connect(self.compartments[(i,j,zind1)],back)
 
         
         

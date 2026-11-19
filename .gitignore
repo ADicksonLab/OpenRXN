@@ -1,0 +1,13 @@
+# Python build and cache files
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# files written by the examples
+1D_diffusion.pdf
+membrane.gexf
